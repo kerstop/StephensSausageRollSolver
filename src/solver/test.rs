@@ -2,6 +2,13 @@ use super::*;
 use std::cell::OnceCell;
 #[test]
 fn push_sausages() {
+    let description = LevelDescription {
+        start_pos: IVec2::ZERO,
+        start_dir: IVec2::X,
+        ground: HashSet::new(),
+        grills: HashSet::new(),
+        sausages: Vec::new(),
+    };
     let mut state = LevelState {
         player_pos: IVec2::new(-10, -10),
         player_dir: IVec2::X,
@@ -12,7 +19,7 @@ fn push_sausages() {
         }],
         neighbors: OnceCell::new(),
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::X);
+    state.push_sausages(IVec2::new(0, 0), IVec2::X, &description);
     assert_eq!(
         state,
         LevelState {
@@ -26,7 +33,7 @@ fn push_sausages() {
             neighbors: OnceCell::new(),
         }
     );
-    state.push_sausages(IVec2::new(1, 0), -IVec2::X);
+    state.push_sausages(IVec2::new(1, 0), -IVec2::X, &description);
     assert_eq!(
         state,
         LevelState {
@@ -51,7 +58,7 @@ fn push_sausages() {
         }],
         neighbors: OnceCell::new(),
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::Y);
+    state.push_sausages(IVec2::new(0, 0), IVec2::Y, &description);
     assert_eq!(
         state,
         LevelState {
@@ -65,7 +72,7 @@ fn push_sausages() {
             neighbors: OnceCell::new(),
         }
     );
-    state.push_sausages(IVec2::new(0, 1), -IVec2::Y);
+    state.push_sausages(IVec2::new(0, 1), -IVec2::Y, &description);
     assert_eq!(
         state,
         LevelState {
@@ -97,7 +104,7 @@ fn push_sausages() {
         ],
         neighbors: OnceCell::new(),
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::X);
+    state.push_sausages(IVec2::new(0, 0), IVec2::X, &description);
     assert_eq!(
         state,
         LevelState {
@@ -136,7 +143,7 @@ fn push_sausages() {
         ],
         neighbors: OnceCell::new(),
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::X);
+    state.push_sausages(IVec2::new(0, 0), IVec2::X, &description);
     assert_eq!(
         state,
         LevelState {

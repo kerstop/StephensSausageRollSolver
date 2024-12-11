@@ -12,13 +12,6 @@ mod test;
 
 use bevy_math::IVec2;
 
-pub enum Direction {
-    Up,
-    Right,
-    Down,
-    Left,
-}
-
 #[derive(Debug, Clone)]
 pub struct LevelDescription {
     start_pos: IVec2,
@@ -34,6 +27,14 @@ pub struct LevelState {
     player_dir: IVec2,
     sausages: Vec<Sausage>,
     neighbors: OnceCell<NodeNeighbors>,
+}
+
+#[derive(Debug, Clone)]
+enum LevelStatus {
+    Unsolved,
+    Lost,
+    Solution,
+    Burnt,
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +73,47 @@ impl LevelState {
             .find(|s| s.pos == pos || s.pos + IVec2::from(s.orientation) == pos)
     }
 
-    fn push_sausages(&mut self, pos: IVec2, dir: IVec2) {
+    fn get_status(state: &LevelState, description: &LevelDescription) -> LevelStatus {
+        let ground = &description.ground;
+        let grills = &description.grills;
+        // no sausages Lost
+        for sausage in &state.sausages {
+            let sausage_pos_1 = sausage.pos;
+            let sausage_pos_2 = match sausage.orientation {
+                SausageOrientation::Horizantal => sausage_pos_1 + IVec2::X,
+                SausageOrientation::Vertical => sausage_pos_1 + IVec2::Y,
+            };
+            if !(ground.contains(&sausage_pos_1)
+                || ground.contains(&sausage_pos_2)
+                || grills.contains(&sausage_pos_1)
+                || grills.contains(&sausage_pos_2))
+            {
+                return LevelStatus::Lost;
+            }
+        }
+        // no sausages burnt
+        for sausage in &state.sausages {
+            if sausage.cooked[0][0] > 1
+                || sausage.cooked[0][1] > 1
+                || sausage.cooked[1][0] > 1
+                || sausage.cooked[1][1] > 1
+            {
+                return LevelStatus::Burnt;
+            }
+        }
+        // win?
+        if state.sausages.iter().all(|s| {
+            s.cooked[0][0] == 1 || s.cooked[0][1] == 1 || s.cooked[1][0] == 1 || s.cooked[1][1] == 1
+        }) && state.player_pos == description.start_pos
+            && state.player_dir == description.start_dir
+        {
+            return LevelStatus::Solution;
+        }
+
+        LevelStatus::Unsolved
+    }
+
+    fn push_sausages(&mut self, pos: IVec2, dir: IVec2, description: &LevelDescription) {
         let (i, sausage_to_push) = match self
             .sausages
             .iter_mut()
@@ -91,18 +132,82 @@ impl LevelState {
                 sausage_to_push.pos + dir,
                 sausage_to_push.pos + IVec2::from(sausage_to_push.orientation) + dir,
             ];
-            self.push_sausages(tiles_to_clear[0], dir);
-            self.push_sausages(tiles_to_clear[1], dir);
+            self.push_sausages(tiles_to_clear[0], dir, description);
+            self.push_sausages(tiles_to_clear[1], dir, description);
         } else {
             //sliding
             let sausage_pos = sausage_to_push.pos;
             if dir == IVec2::from(sausage_to_push.orientation) {
-                self.push_sausages(sausage_pos + (dir * 2), dir)
+                self.push_sausages(sausage_pos + (dir * 2), dir, description)
             } else {
-                self.push_sausages(sausage_pos + dir, dir);
+                self.push_sausages(sausage_pos + dir, dir, description);
             }
         }
         self.sausages[i].pos += dir;
+        if description.grills.contains(&self.sausages[i].pos) {
+            self.sausages[i].cooked[0][0] += 1
+        }
+        if description
+            .grills
+            .contains(&(self.sausages[i].pos + IVec2::from(self.sausages[i].orientation)))
+        {
+            self.sausages[i].cooked[0][1] += 1
+        }
+    }
+
+    fn get_next_state(&self, description: &LevelDescription, input: IVec2) -> LevelState {
+        let mut state = self.clone();
+
+        match input {
+            IVec2 { x: 1, y: 0 } => (),
+            IVec2 { x: 0, y: 1 } => (),
+            IVec2 { x: -1, y: 0 } => (),
+            IVec2 { x: 0, y: -1 } => (),
+            _ => panic!("get_next_state was supplied a vector that was not a basis vector"),
+        };
+
+        if self.player_dir == input {
+            state.push_sausages(
+                state.player_pos + (state.player_dir * 2),
+                state.player_dir,
+                description,
+            );
+            state.player_pos += state.player_dir;
+        }
+        if -self.player_dir == input {
+            state.push_sausages(
+                state.player_pos - state.player_dir,
+                -state.player_dir,
+                description,
+            );
+            state.player_pos -= state.player_dir;
+        }
+        if self.player_dir.perp() == input {
+            let perp = self.player_dir.perp();
+            state.push_sausages(
+                state.player_pos + state.player_dir + perp,
+                perp,
+                description,
+            );
+            state.push_sausages(state.player_pos + perp, -state.player_dir, description);
+            state.player_dir = perp;
+        }
+        if -self.player_dir.perp() == input {
+            let perp = -self.player_dir.perp();
+            state.push_sausages(
+                state.player_pos + state.player_dir + perp,
+                perp,
+                description,
+            );
+            state.push_sausages(state.player_pos + perp, -state.player_dir, description);
+            state.player_dir = perp;
+        }
+
+        if description.grills.contains(&state.player_pos) {
+            state.player_pos -= input
+        }
+
+        state
     }
 }
 
@@ -153,55 +258,32 @@ fn generate_graph(level_description: LevelDescription) -> LevelGraph {
         }
 
         let forward: Weak<LevelState> = {
-            let mut new_state = (*current_state).clone();
-
-            new_state.push_sausages(
-                new_state.player_pos + (new_state.player_dir * 2),
-                new_state.player_dir,
-            );
-            new_state.player_pos += new_state.player_dir;
-
-            let new_state = Rc::new(new_state);
+            let new_state =
+                Rc::new(current_state.get_next_state(&level_description, current_state.player_dir));
             states.insert(new_state.clone());
             exploration_queue.push_back(new_state.clone());
             Rc::downgrade(&new_state)
         };
         let back: Weak<LevelState> = {
-            let mut new_state = (*current_state).clone();
-
-            new_state.push_sausages(
-                new_state.player_pos - new_state.player_dir,
-                -new_state.player_dir,
+            let new_state = Rc::new(
+                current_state.get_next_state(&level_description, -current_state.player_dir),
             );
-            new_state.player_pos -= new_state.player_dir;
-
-            let new_state = Rc::new(new_state);
             states.insert(new_state.clone());
             exploration_queue.push_back(new_state.clone());
             Rc::downgrade(&new_state)
         };
         let right: Weak<LevelState> = {
-            let mut new_state = (*current_state).clone();
-            let perp = new_state.player_dir.perp();
-
-            new_state.push_sausages(new_state.player_pos + new_state.player_dir + perp, perp);
-            new_state.push_sausages(new_state.player_pos + perp, -new_state.player_dir);
-            new_state.player_dir = perp;
-
-            let new_state = Rc::new(new_state);
+            let new_state = Rc::new(
+                current_state.get_next_state(&level_description, current_state.player_dir.perp()),
+            );
             states.insert(new_state.clone());
             exploration_queue.push_back(new_state.clone());
             Rc::downgrade(&new_state)
         };
         let left: Weak<LevelState> = {
-            let mut new_state = (*current_state).clone();
-            let perp = -new_state.player_dir.perp();
-
-            new_state.push_sausages(new_state.player_pos + new_state.player_dir + perp, perp);
-            new_state.push_sausages(new_state.player_pos + perp, -new_state.player_dir);
-            new_state.player_dir = perp;
-
-            let new_state = Rc::new(new_state);
+            let new_state = Rc::new(
+                current_state.get_next_state(&level_description, current_state.player_dir.perp()),
+            );
             states.insert(new_state.clone());
             exploration_queue.push_back(new_state.clone());
             Rc::downgrade(&new_state)
@@ -224,54 +306,4 @@ fn generate_graph(level_description: LevelDescription) -> LevelGraph {
         states,
         initial_state,
     }
-}
-
-enum StateProgress {
-    Unsolved,
-    Lost,
-    Solution,
-    Burnt,
-}
-
-fn evaluate_level_state_progress(
-    state: &LevelState,
-    description: &LevelDescription,
-) -> StateProgress {
-    let ground = &description.ground;
-    let grills = &description.grills;
-    // no sausages Lost
-    for sausage in &state.sausages {
-        let sausage_pos_1 = sausage.pos;
-        let sausage_pos_2 = match sausage.orientation {
-            SausageOrientation::Horizantal => sausage_pos_1 + IVec2::X,
-            SausageOrientation::Vertical => sausage_pos_1 + IVec2::Y,
-        };
-        if !(ground.contains(&sausage_pos_1)
-            || ground.contains(&sausage_pos_2)
-            || grills.contains(&sausage_pos_1)
-            || grills.contains(&sausage_pos_2))
-        {
-            return StateProgress::Lost;
-        }
-    }
-    // no sausages burnt
-    for sausage in &state.sausages {
-        if sausage.cooked[0][0] > 1
-            || sausage.cooked[0][1] > 1
-            || sausage.cooked[1][0] > 1
-            || sausage.cooked[1][1] > 1
-        {
-            return StateProgress::Burnt;
-        }
-    }
-    // win?
-    if state.sausages.iter().all(|s| {
-        s.cooked[0][0] == 1 || s.cooked[0][1] == 1 || s.cooked[1][0] == 1 || s.cooked[1][1] == 1
-    }) && state.player_pos == description.start_pos
-        && state.player_dir == description.start_dir
-    {
-        return StateProgress::Solution;
-    }
-
-    StateProgress::Unsolved
 }
