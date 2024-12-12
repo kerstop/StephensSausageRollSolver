@@ -449,6 +449,7 @@ name = "stephens_sausage_roll_solver"
 version = "0.1.0"
 dependencies = [
  "bevy_math",
+ "wasm-bindgen",
 ]
 
 [[package]]

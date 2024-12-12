@@ -1,0 +1,30 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+}
+
+.tile {
+  height: 30px;
+  width: 30px;
+  border: 1px solid hsl(from white h s 40%);
+  margin: 2px;
+}
+
+.water {
+  background-color: hsl(from blue h 70% l);
+}
+
+.ground {
+  background-color: hsl(from green h 70% l);
+}
+
+.grill {
+  background-color: hsl(from red h 70% l);
+}

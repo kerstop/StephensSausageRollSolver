@@ -6,6 +6,7 @@ use std::{
     hash::Hash,
     rc::{Rc, Weak},
 };
+use wasm_bindgen::prelude::*;
 
 #[cfg(test)]
 mod test;
@@ -13,6 +14,7 @@ mod test;
 use bevy_math::IVec2;
 
 #[derive(Debug, Clone)]
+#[wasm_bindgen]
 pub struct LevelDescription {
     start_pos: IVec2,
     start_dir: IVec2,
@@ -21,7 +23,41 @@ pub struct LevelDescription {
     sausages: Vec<Sausage>,
 }
 
+#[derive(Clone, Copy)]
+#[wasm_bindgen]
+pub struct JSVec {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl From<JSVec> for IVec2 {
+    fn from(value: JSVec) -> Self {
+        IVec2::new(value.x, value.y)
+    }
+}
+
+#[wasm_bindgen]
+impl LevelDescription {
+    #[wasm_bindgen(constructor)]
+    pub fn constructor(
+        start_pos: JSVec,
+        start_dir: JSVec,
+        ground: Vec<JSVec>,
+        grills: Vec<JSVec>,
+        sausages: Vec<Sausage>,
+    ) -> LevelDescription {
+        LevelDescription {
+            start_pos: start_pos.into(),
+            start_dir: start_dir.into(),
+            ground: ground.iter().map(|v| IVec2::from(*v)).collect(),
+            grills: ground.iter().map(|v| IVec2::from(*v)).collect(),
+            sausages,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
+#[wasm_bindgen]
 pub struct LevelState {
     player_pos: IVec2,
     player_dir: IVec2,
@@ -30,7 +66,8 @@ pub struct LevelState {
 }
 
 #[derive(Debug, Clone)]
-enum LevelStatus {
+#[wasm_bindgen]
+pub enum LevelStatus {
     Unsolved,
     Lost,
     Solution,
@@ -38,11 +75,32 @@ enum LevelStatus {
 }
 
 #[derive(Debug, Clone)]
+#[wasm_bindgen]
 struct NodeNeighbors {
     forward: Weak<LevelState>,
     back: Weak<LevelState>,
     right: Weak<LevelState>,
     left: Weak<LevelState>,
+}
+
+#[wasm_bindgen]
+impl NodeNeighbors {
+    #[wasm_bindgen(getter)]
+    pub fn forward(&self) -> Option<LevelState> {
+        Some((*self.forward.upgrade()?).clone())
+    }
+    #[wasm_bindgen(getter)]
+    pub fn back(&self) -> Option<LevelState> {
+        Some((*self.back.upgrade()?).clone())
+    }
+    #[wasm_bindgen(getter)]
+    pub fn right(&self) -> Option<LevelState> {
+        Some((*self.right.upgrade()?).clone())
+    }
+    #[wasm_bindgen(getter)]
+    pub fn left(&self) -> Option<LevelState> {
+        Some((*self.left.upgrade()?).clone())
+    }
 }
 
 impl Hash for LevelState {
@@ -211,12 +269,22 @@ impl LevelState {
     }
 }
 
+#[wasm_bindgen]
 pub struct LevelGraph {
     states: HashSet<Rc<LevelState>>,
     initial_state: Rc<LevelState>,
 }
 
+#[wasm_bindgen]
+impl LevelGraph {
+    #[wasm_bindgen(getter)]
+    pub fn initial_state(&self) -> LevelState {
+        (*self.initial_state).clone()
+    }
+}
+
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[wasm_bindgen]
 pub enum SausageOrientation {
     Horizantal,
     Vertical,
@@ -231,14 +299,34 @@ impl From<SausageOrientation> for IVec2 {
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[wasm_bindgen]
 pub struct Sausage {
     pos: IVec2,
     // zero is the side that is down
     cooked: [[u8; 2]; 2],
-    orientation: SausageOrientation,
+    pub orientation: SausageOrientation,
 }
 
-fn generate_graph(level_description: LevelDescription) -> LevelGraph {
+#[wasm_bindgen]
+impl Sausage {
+    #[wasm_bindgen(getter)]
+    pub fn pos(&self) -> Vec<i32> {
+        vec![self.pos.x, self.pos.y]
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn cooked(&self) -> Vec<u8> {
+        vec![
+            self.cooked[0][0],
+            self.cooked[0][1],
+            self.cooked[1][0],
+            self.cooked[1][1],
+        ]
+    }
+}
+
+#[wasm_bindgen]
+pub fn generate_graph(level_description: LevelDescription) -> LevelGraph {
     let initial_state = Rc::new(LevelState {
         player_pos: level_description.start_pos,
         player_dir: level_description.start_dir,
