@@ -309,6 +309,21 @@ pub struct Sausage {
 
 #[wasm_bindgen]
 impl Sausage {
+    #[wasm_bindgen(constructor)]
+    pub fn new(pos_x: i32, pos_y: i32, orientation: SausageOrientation) -> Self {
+        Sausage {
+            pos: IVec2::new(pos_x, pos_y),
+            cooked: [[0, 0], [0, 0]],
+            orientation,
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn check_collision(&self, x: i32, y: i32) -> bool {
+        let check_pos = IVec2::new(x, y);
+        check_pos == self.pos || check_pos == self.pos + IVec2::from(self.orientation)
+    }
+
     #[wasm_bindgen(getter)]
     pub fn pos(&self) -> Vec<i32> {
         vec![self.pos.x, self.pos.y]
