@@ -7,6 +7,7 @@ export interface Sausage {
 }
 
 export type SausageOrientation = "Vertical" | "Horizontal";
+export type TileType = "water" | "ground" | "grill";
 
 export interface NodeNeighbors {
   forward: number;
@@ -27,4 +28,12 @@ export interface LevelGraph {
   states: LevelState[];
   edges: [number, number][];
   initial_state: number;
+}
+
+export interface LevelDescription {
+  start_pos: IVec2;
+  start_dir: IVec2;
+  ground: IVec2[];
+  grills: IVec2[];
+  sausages: IVec2[];
 }
