@@ -1,12 +1,11 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
 import "./App.css";
 import * as solver from "solver";
-import { Sausage, SausageOrientation } from "solver";
-import { Tile, TileType } from "./Tile";
+import Graph from "./Graph";
+import { IVec2, Sausage } from "./types";
 
 type Tool = "water" | "ground" | "grill";
+type TileType = "water" | "ground" | "grill";
 
 function App() {
   const [tileTypes, setTileTypes] = useState<TileType[][]>(
@@ -15,11 +14,12 @@ function App() {
 
   const [tool, setTool] = useState<Tool>("water");
 
-  const [sausages, setSausages] = useState<solver.Sausage[]>([]);
+  const [sausages, setSausages] = useState<Sausage[]>([]);
   const [playerDir, setPlayerDir] = useState<"up" | "right" | "down" | "left">(
     "up",
   );
-  const [playerPos, setPlayerPos] = useState<[number, number] | null>(null);
+  const [playerPos, setPlayerPos] = useState<IVec2 | null>(null);
+  const [solution, setSolution] = useState<null | any>(null);
 
   return (
     <>
@@ -120,13 +120,27 @@ function App() {
                         case "horizontal":
                           setSausages([
                             ...sausages,
-                            new Sausage(x, y, SausageOrientation.Horizantal),
+                            {
+                              pos: [x, y],
+                              cooked: [
+                                [0, 0],
+                                [0, 0],
+                              ],
+                              orientation: "Horizontal",
+                            },
                           ]);
                           break;
                         case "vertical":
                           setSausages([
                             ...sausages,
-                            new Sausage(x, y, SausageOrientation.Vertical),
+                            {
+                              pos: [x, y],
+                              cooked: [
+                                [0, 0],
+                                [0, 0],
+                              ],
+                              orientation: "Vertical",
+                            },
                           ]);
                           break;
                         case "player":
@@ -151,10 +165,8 @@ function App() {
                   }}
                 >
                   {sausages.map((s) => {
-                    if (s.check_collision(x, y)) {
-                      return s.orientation === SausageOrientation.Vertical
-                        ? "V"
-                        : "H";
+                    if (s.pos[0] === x && s.pos[1] === y) {
+                      return s.orientation === "Vertical" ? "V" : "H";
                     }
                   })}
                   {playerPos?.[0] === x && playerPos[1] === y ? "P" : ""}
@@ -164,6 +176,55 @@ function App() {
           </div>
         );
       })}
+      <button
+        onClick={() => {
+          if (playerPos !== null) {
+            let playerDirVector = [1, 0];
+            switch (playerDir) {
+              case "up":
+                playerDirVector = [0, -1];
+                break;
+              case "right":
+                playerDirVector = [1, 0];
+                break;
+              case "down":
+                playerDirVector = [0, 1];
+                break;
+              case "left":
+                playerDirVector = [-1, 0];
+                break;
+            }
+            let ground: IVec2[] = [];
+            let grills: IVec2[] = [];
+            tileTypes.forEach((row, y) => {
+              row.forEach((tile, x) => {
+                if (tile === "ground") {
+                  ground.push([x, y]);
+                }
+                if (tile === "grill") {
+                  grills.push([x, y]);
+                }
+              });
+            });
+            const level_description = {
+              start_pos: playerPos,
+              start_dir: playerDirVector,
+              ground,
+              grills,
+              sausages,
+            };
+            console.log(
+              `level description : ${JSON.stringify(level_description)}`,
+            );
+            const graph = solver.generate_graph(level_description);
+            console.log("solution found", graph);
+            setSolution(graph);
+          }
+        }}
+      >
+        Solve
+      </button>
+      {solution !== null ? <Graph level={solution}></Graph> : ""}
     </>
   );
 }

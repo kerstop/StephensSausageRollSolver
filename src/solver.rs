@@ -1,9 +1,10 @@
 #![allow(unused)]
+use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::{
     backtrace,
     cell::OnceCell,
     collections::{HashSet, VecDeque},
-    hash::Hash,
+    hash::{DefaultHasher, Hash, Hasher},
     rc::{Rc, Weak},
 };
 use wasm_bindgen::prelude::*;
@@ -13,8 +14,7 @@ mod test;
 
 use bevy_math::IVec2;
 
-#[derive(Debug, Clone)]
-#[wasm_bindgen]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelDescription {
     start_pos: IVec2,
     start_dir: IVec2,
@@ -23,41 +23,7 @@ pub struct LevelDescription {
     sausages: Vec<Sausage>,
 }
 
-#[derive(Clone, Copy)]
-#[wasm_bindgen]
-pub struct JSVec {
-    pub x: i32,
-    pub y: i32,
-}
-
-impl From<JSVec> for IVec2 {
-    fn from(value: JSVec) -> Self {
-        IVec2::new(value.x, value.y)
-    }
-}
-
-#[wasm_bindgen]
-impl LevelDescription {
-    #[wasm_bindgen(constructor)]
-    pub fn constructor(
-        start_pos: JSVec,
-        start_dir: JSVec,
-        ground: Vec<JSVec>,
-        grills: Vec<JSVec>,
-        sausages: Vec<Sausage>,
-    ) -> LevelDescription {
-        LevelDescription {
-            start_pos: start_pos.into(),
-            start_dir: start_dir.into(),
-            ground: ground.iter().map(|v| IVec2::from(*v)).collect(),
-            grills: ground.iter().map(|v| IVec2::from(*v)).collect(),
-            sausages,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
-#[wasm_bindgen]
 pub struct LevelState {
     player_pos: IVec2,
     player_dir: IVec2,
@@ -65,7 +31,22 @@ pub struct LevelState {
     neighbors: OnceCell<NodeNeighbors>,
 }
 
-#[derive(Debug, Clone)]
+impl Serialize for LevelState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = serializer.serialize_map(Some(5))?;
+        s.serialize_entry("id", &self.get_id());
+        s.serialize_entry("player_pos", &self.player_pos);
+        s.serialize_entry("player_dir", &self.player_dir);
+        s.serialize_entry("sausages", &self.sausages);
+        s.serialize_entry("neighbors", &self.neighbors.get());
+        s.end()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[wasm_bindgen]
 pub enum LevelStatus {
     Unsolved,
@@ -75,7 +56,6 @@ pub enum LevelStatus {
 }
 
 #[derive(Debug, Clone)]
-#[wasm_bindgen]
 struct NodeNeighbors {
     forward: Weak<LevelState>,
     back: Weak<LevelState>,
@@ -83,23 +63,23 @@ struct NodeNeighbors {
     left: Weak<LevelState>,
 }
 
-#[wasm_bindgen]
-impl NodeNeighbors {
-    #[wasm_bindgen(getter)]
-    pub fn forward(&self) -> Option<LevelState> {
-        Some((*self.forward.upgrade()?).clone())
-    }
-    #[wasm_bindgen(getter)]
-    pub fn back(&self) -> Option<LevelState> {
-        Some((*self.back.upgrade()?).clone())
-    }
-    #[wasm_bindgen(getter)]
-    pub fn right(&self) -> Option<LevelState> {
-        Some((*self.right.upgrade()?).clone())
-    }
-    #[wasm_bindgen(getter)]
-    pub fn left(&self) -> Option<LevelState> {
-        Some((*self.left.upgrade()?).clone())
+impl Serialize for NodeNeighbors {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        fn weak_to_id(r: &Weak<LevelState>) -> u64 {
+            match r.upgrade() {
+                Some(state) => state.get_id(),
+                None => 0,
+            }
+        }
+        let mut s = serializer.serialize_map(Some(4))?;
+        s.serialize_entry("forward", &weak_to_id(&self.forward));
+        s.serialize_entry("back", &weak_to_id(&self.back));
+        s.serialize_entry("right", &weak_to_id(&self.right));
+        s.serialize_entry("left", &weak_to_id(&self.left));
+        s.end()
     }
 }
 
@@ -138,7 +118,7 @@ impl LevelState {
         for sausage in &state.sausages {
             let sausage_pos_1 = sausage.pos;
             let sausage_pos_2 = match sausage.orientation {
-                SausageOrientation::Horizantal => sausage_pos_1 + IVec2::X,
+                SausageOrientation::Horizontal => sausage_pos_1 + IVec2::X,
                 SausageOrientation::Vertical => sausage_pos_1 + IVec2::Y,
             };
             if !(ground.contains(&sausage_pos_1)
@@ -269,37 +249,63 @@ impl LevelState {
     }
 }
 
-#[wasm_bindgen]
+impl LevelState {
+    pub fn get_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
 pub struct LevelGraph {
     states: HashSet<Rc<LevelState>>,
     initial_state: Rc<LevelState>,
 }
 
-#[wasm_bindgen]
-impl LevelGraph {
-    #[wasm_bindgen(getter)]
-    pub fn initial_state(&self) -> LevelState {
-        (*self.initial_state).clone()
+impl Serialize for LevelGraph {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = serializer.serialize_map(Some(3))?;
+        s.serialize_entry(
+            "states",
+            &self
+                .states
+                .iter()
+                .map(|l| l.as_ref())
+                .collect::<Vec<&LevelState>>(),
+        );
+        let mut edges = Vec::new();
+        self.states.iter().for_each(|s| {
+            if let Some(n) = s.neighbors.get() {
+                edges.push((s.get_id(), n.forward.upgrade().unwrap().get_id()));
+                edges.push((s.get_id(), n.back.upgrade().unwrap().get_id()));
+                edges.push((s.get_id(), n.right.upgrade().unwrap().get_id()));
+                edges.push((s.get_id(), n.left.upgrade().unwrap().get_id()));
+            }
+        });
+        s.serialize_entry("edges", &edges);
+        s.serialize_entry("initial_state", self.initial_state.as_ref());
+        s.end()
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SausageOrientation {
-    Horizantal,
+    Horizontal,
     Vertical,
 }
 impl From<SausageOrientation> for IVec2 {
     fn from(value: SausageOrientation) -> Self {
         match value {
-            SausageOrientation::Horizantal => IVec2::X,
+            SausageOrientation::Horizontal => IVec2::X,
             SausageOrientation::Vertical => IVec2::Y,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Sausage {
     pos: IVec2,
     // zero is the side that is down
@@ -307,29 +313,16 @@ pub struct Sausage {
     pub orientation: SausageOrientation,
 }
 
-#[wasm_bindgen]
 impl Sausage {
-    #[wasm_bindgen(constructor)]
-    pub fn new(pos_x: i32, pos_y: i32, orientation: SausageOrientation) -> Self {
-        Sausage {
-            pos: IVec2::new(pos_x, pos_y),
-            cooked: [[0, 0], [0, 0]],
-            orientation,
-        }
-    }
-
-    #[wasm_bindgen]
     pub fn check_collision(&self, x: i32, y: i32) -> bool {
         let check_pos = IVec2::new(x, y);
         check_pos == self.pos || check_pos == self.pos + IVec2::from(self.orientation)
     }
 
-    #[wasm_bindgen(getter)]
     pub fn pos(&self) -> Vec<i32> {
         vec![self.pos.x, self.pos.y]
     }
 
-    #[wasm_bindgen(getter)]
     pub fn cooked(&self) -> Vec<u8> {
         vec![
             self.cooked[0][0],
@@ -341,7 +334,22 @@ impl Sausage {
 }
 
 #[wasm_bindgen]
-pub fn generate_graph(level_description: LevelDescription) -> LevelGraph {
+pub fn solve(level_description: JsValue) -> JsValue {
+    console_error_panic_hook::set_once();
+
+    let parsed: LevelDescription = match serde_wasm_bindgen::from_value(level_description) {
+        Ok(d) => d,
+        Err(e) => {
+            web_sys::console::log_2(&"error parsing level description".into(), &e.into());
+            return JsValue::null();
+        }
+    };
+    serde_wasm_bindgen::to_value(&generate_graph(&parsed)).unwrap()
+}
+
+pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
+    console_error_panic_hook::set_once();
+
     let initial_state = Rc::new(LevelState {
         player_pos: level_description.start_pos,
         player_dir: level_description.start_dir,
@@ -401,8 +409,6 @@ pub fn generate_graph(level_description: LevelDescription) -> LevelGraph {
                 left,
             })
             .unwrap();
-
-        todo!()
     }
 
     LevelGraph {
