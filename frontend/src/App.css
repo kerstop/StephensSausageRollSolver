@@ -49,3 +49,10 @@
     flex-basis: 50%;
   }
 }
+
+.cytoscape-target {
+  aspect-ratio: 16 / 9;
+  text-align: left;
+  background-color: hsl(from #242424 h s calc(l + 10));
+  border-radius: 20px;
+}

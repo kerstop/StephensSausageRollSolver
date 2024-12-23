@@ -14,6 +14,13 @@ mod test;
 
 use bevy_math::IVec2;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TileType {
+    Ground,
+    Grill,
+    Water,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelDescription {
     start_pos: IVec2,
@@ -21,6 +28,18 @@ pub struct LevelDescription {
     ground: HashSet<IVec2>,
     grills: HashSet<IVec2>,
     sausages: Vec<Sausage>,
+}
+
+impl LevelDescription {
+    fn get_tile_type(&self, tile: IVec2) -> TileType {
+        if self.ground.contains(&tile) {
+            return TileType::Ground;
+        }
+        if self.grills.contains(&tile) {
+            return TileType::Grill;
+        }
+        TileType::Water
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,8 +65,18 @@ impl Serialize for LevelState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[wasm_bindgen]
+impl From<&LevelDescription> for LevelState {
+    fn from(value: &LevelDescription) -> Self {
+        LevelState {
+            player_pos: value.start_pos,
+            player_dir: value.start_dir,
+            sausages: value.sausages.clone(),
+            neighbors: OnceCell::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LevelStatus {
     Unsolved,
     Lost,
@@ -111,11 +140,11 @@ impl LevelState {
             .find(|s| s.pos == pos || s.pos + IVec2::from(s.orientation) == pos)
     }
 
-    fn get_status(state: &LevelState, description: &LevelDescription) -> LevelStatus {
+    fn get_status(&self, description: &LevelDescription) -> LevelStatus {
         let ground = &description.ground;
         let grills = &description.grills;
         // no sausages Lost
-        for sausage in &state.sausages {
+        for sausage in &self.sausages {
             let sausage_pos_1 = sausage.pos;
             let sausage_pos_2 = match sausage.orientation {
                 SausageOrientation::Horizontal => sausage_pos_1 + IVec2::X,
@@ -130,7 +159,7 @@ impl LevelState {
             }
         }
         // no sausages burnt
-        for sausage in &state.sausages {
+        for sausage in &self.sausages {
             if sausage.cooked[0][0] > 1
                 || sausage.cooked[0][1] > 1
                 || sausage.cooked[1][0] > 1
@@ -140,10 +169,10 @@ impl LevelState {
             }
         }
         // win?
-        if state.sausages.iter().all(|s| {
+        if self.sausages.iter().all(|s| {
             s.cooked[0][0] == 1 || s.cooked[0][1] == 1 || s.cooked[1][0] == 1 || s.cooked[1][1] == 1
-        }) && state.player_pos == description.start_pos
-            && state.player_dir == description.start_dir
+        }) && self.player_pos == description.start_pos
+            && self.player_dir == description.start_dir
         {
             return LevelStatus::Solution;
         }
@@ -204,7 +233,9 @@ impl LevelState {
             _ => panic!("get_next_state was supplied a vector that was not a basis vector"),
         };
 
-        if self.player_dir == input {
+        if self.player_dir == input
+            && description.get_tile_type(self.player_pos + input) != TileType::Water
+        {
             state.push_sausages(
                 state.player_pos + (state.player_dir * 2),
                 state.player_dir,
@@ -212,7 +243,9 @@ impl LevelState {
             );
             state.player_pos += state.player_dir;
         }
-        if -self.player_dir == input {
+        if -self.player_dir == input
+            && description.get_tile_type(self.player_pos - self.player_dir) != TileType::Water
+        {
             state.push_sausages(
                 state.player_pos - state.player_dir,
                 -state.player_dir,
@@ -334,28 +367,21 @@ impl Sausage {
 }
 
 #[wasm_bindgen]
-pub fn solve(level_description: JsValue) -> JsValue {
+pub fn solve(level_description: JsValue) -> String {
     console_error_panic_hook::set_once();
 
     let parsed: LevelDescription = match serde_wasm_bindgen::from_value(level_description) {
         Ok(d) => d,
         Err(e) => {
             web_sys::console::log_2(&"error parsing level description".into(), &e.into());
-            return JsValue::null();
+            return "null".into();
         }
     };
-    serde_wasm_bindgen::to_value(&generate_graph(&parsed)).unwrap()
+    serde_json::to_string(&generate_graph(&parsed)).unwrap()
 }
 
 pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
-    console_error_panic_hook::set_once();
-
-    let initial_state = Rc::new(LevelState {
-        player_pos: level_description.start_pos,
-        player_dir: level_description.start_dir,
-        sausages: level_description.sausages.clone(),
-        neighbors: OnceCell::new(),
-    });
+    let initial_state = Rc::new(LevelState::from(level_description));
     #[allow(clippy::mutable_key_type)]
     let mut states = HashSet::new();
     states.insert(Rc::clone(&initial_state));
@@ -364,40 +390,57 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
     exploration_queue.push_back(Rc::clone(&initial_state));
 
     while let Some(current_state) = exploration_queue.pop_front() {
+        println!("---");
+        println!("{} current node id", current_state.get_id());
+        println!("{:?} node neighbors value", current_state.neighbors);
+        println!("{} nodes in queue", exploration_queue.len());
+        println!("{} unique states found", states.len());
+        println!(
+            "current node status is {:?}",
+            current_state.get_status(level_description)
+        );
+        println!("{}", serde_json::to_string(current_state.as_ref()).unwrap());
         if current_state.neighbors.get().is_some() {
+            println!("node previously explored");
             continue;
+        }
+
+        match current_state.get_status(level_description) {
+            LevelStatus::Lost => continue,
+            LevelStatus::Solution => continue,
+            LevelStatus::Burnt => continue,
+            _ => (),
         }
 
         let forward: Weak<LevelState> = {
             let new_state =
-                Rc::new(current_state.get_next_state(&level_description, current_state.player_dir));
-            states.insert(new_state.clone());
-            exploration_queue.push_back(new_state.clone());
-            Rc::downgrade(&new_state)
+                Rc::new(current_state.get_next_state(level_description, current_state.player_dir));
+            let saved_state = states.get_or_insert(new_state);
+            exploration_queue.push_back(saved_state.clone());
+            Rc::downgrade(&saved_state)
         };
         let back: Weak<LevelState> = {
-            let new_state = Rc::new(
-                current_state.get_next_state(&level_description, -current_state.player_dir),
-            );
-            states.insert(new_state.clone());
-            exploration_queue.push_back(new_state.clone());
-            Rc::downgrade(&new_state)
+            let new_state =
+                Rc::new(current_state.get_next_state(level_description, -current_state.player_dir));
+            let saved_state = states.get_or_insert(new_state);
+            exploration_queue.push_back(saved_state.clone());
+            Rc::downgrade(&saved_state)
         };
         let right: Weak<LevelState> = {
             let new_state = Rc::new(
-                current_state.get_next_state(&level_description, current_state.player_dir.perp()),
+                current_state.get_next_state(level_description, current_state.player_dir.perp()),
             );
-            states.insert(new_state.clone());
-            exploration_queue.push_back(new_state.clone());
-            Rc::downgrade(&new_state)
+            let saved_state = states.get_or_insert(new_state);
+            exploration_queue.push_back(saved_state.clone());
+            Rc::downgrade(&saved_state)
         };
         let left: Weak<LevelState> = {
             let new_state = Rc::new(
-                current_state.get_next_state(&level_description, current_state.player_dir.perp()),
+                current_state.get_next_state(level_description, current_state.player_dir.perp()),
             );
-            states.insert(new_state.clone());
-            exploration_queue.push_back(new_state.clone());
-            Rc::downgrade(&new_state)
+            let saved_state = states.get_or_insert(new_state);
+            exploration_queue.push_back(saved_state.clone());
+            Rc::downgrade(&saved_state)
         };
 
         current_state

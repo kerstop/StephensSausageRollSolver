@@ -21,6 +21,43 @@ function App() {
   const [playerPos, setPlayerPos] = useState<IVec2 | null>(null);
   const [solution, setSolution] = useState<null | any>(null);
 
+  const level_description = (() => {
+    let playerDirVector = [1, 0];
+    switch (playerDir) {
+      case "up":
+        playerDirVector = [0, -1];
+        break;
+      case "right":
+        playerDirVector = [1, 0];
+        break;
+      case "down":
+        playerDirVector = [0, 1];
+        break;
+      case "left":
+        playerDirVector = [-1, 0];
+        break;
+    }
+    let ground: IVec2[] = [];
+    let grills: IVec2[] = [];
+    tileTypes.forEach((row, y) => {
+      row.forEach((tile, x) => {
+        if (tile === "ground") {
+          ground.push([x, y]);
+        }
+        if (tile === "grill") {
+          grills.push([x, y]);
+        }
+      });
+    });
+    return {
+      start_pos: playerPos,
+      start_dir: playerDirVector,
+      ground,
+      grills,
+      sausages,
+    };
+  })();
+
   return (
     <>
       <div className="controls">
@@ -176,47 +213,15 @@ function App() {
           </div>
         );
       })}
+      <textarea
+        readOnly={true}
+        value={JSON.stringify(level_description)}
+      ></textarea>
+      <br />
       <button
         onClick={() => {
           if (playerPos !== null) {
-            let playerDirVector = [1, 0];
-            switch (playerDir) {
-              case "up":
-                playerDirVector = [0, -1];
-                break;
-              case "right":
-                playerDirVector = [1, 0];
-                break;
-              case "down":
-                playerDirVector = [0, 1];
-                break;
-              case "left":
-                playerDirVector = [-1, 0];
-                break;
-            }
-            let ground: IVec2[] = [];
-            let grills: IVec2[] = [];
-            tileTypes.forEach((row, y) => {
-              row.forEach((tile, x) => {
-                if (tile === "ground") {
-                  ground.push([x, y]);
-                }
-                if (tile === "grill") {
-                  grills.push([x, y]);
-                }
-              });
-            });
-            const level_description = {
-              start_pos: playerPos,
-              start_dir: playerDirVector,
-              ground,
-              grills,
-              sausages,
-            };
-            console.log(
-              `level description : ${JSON.stringify(level_description)}`,
-            );
-            const graph = solver.generate_graph(level_description);
+            const graph = JSON.parse(solver.solve(level_description));
             console.log("solution found", graph);
             setSolution(graph);
           }

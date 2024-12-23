@@ -167,6 +167,33 @@ fn push_sausages() {
 }
 
 #[test]
+fn level_statuses() {
+    let lost_description: LevelDescription = serde_json::from_str(r#"
+{"start_pos":[1,2],"start_dir":[1,0],"ground":[[2,1],[3,1],[1,2],[2,2],[3,2]],"grills":[],"sausages":[{"pos":[4,1],"cooked":[[0,0],[0,0]],"orientation":"Vertical"}]}
+    "#.trim()).unwrap();
+    let lost_level = LevelState::from(&lost_description);
+    assert_eq!(lost_level.get_status(&lost_description), LevelStatus::Lost);
+
+    let solved_description: LevelDescription = serde_json::from_str(r#"
+{"start_pos":[1,2],"start_dir":[1,0],"ground":[[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2]],"grills":[],"sausages":[{"pos":[4,1],"cooked":[[1,1],[1,1]],"orientation":"Vertical"}]}
+    "#.trim()).unwrap();
+    let solved_level = LevelState::from(&solved_description);
+    assert_eq!(
+        solved_level.get_status(&solved_description),
+        LevelStatus::Solution
+    );
+
+    let burnt_description: LevelDescription = serde_json::from_str(r#"
+{"start_pos":[1,2],"start_dir":[1,0],"ground":[[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2]],"grills":[],"sausages":[{"pos":[4,1],"cooked":[[2,2],[2,2]],"orientation":"Vertical"}]}
+    "#.trim()).unwrap();
+    let burnt_level = LevelState::from(&burnt_description);
+    assert_eq!(
+        burnt_level.get_status(&burnt_description),
+        LevelStatus::Burnt
+    );
+}
+
+#[test]
 fn generate_graph_works() {
     let level_description: LevelDescription = serde_json::from_str(r#"
     {"start_pos":[2,2],"start_dir":[0,-1],"ground":[[4,1],[2,2],[3,2],[4,2]],"grills":[[5,1],[6,1],[5,2],[6,2]],"sausages":[{"pos":[4,1],"cooked":[[0,0],[0,0]],"orientation":"Vertical"}]}
