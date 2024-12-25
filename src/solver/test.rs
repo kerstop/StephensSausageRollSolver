@@ -18,8 +18,9 @@ fn push_sausages() {
             orientation: SausageOrientation::Horizontal,
         }],
         neighbors: OnceCell::new(),
+        description: &description,
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::X, &description);
+    state.push_sausages(IVec2::new(0, 0), IVec2::X);
     assert_eq!(
         state,
         LevelState {
@@ -31,9 +32,10 @@ fn push_sausages() {
                 orientation: SausageOrientation::Horizontal,
             }],
             neighbors: OnceCell::new(),
+            description: &description,
         }
     );
-    state.push_sausages(IVec2::new(1, 0), -IVec2::X, &description);
+    state.push_sausages(IVec2::new(1, 0), -IVec2::X);
     assert_eq!(
         state,
         LevelState {
@@ -45,6 +47,7 @@ fn push_sausages() {
                 orientation: SausageOrientation::Horizontal,
             }],
             neighbors: OnceCell::new(),
+            description: &description,
         }
     );
 
@@ -57,8 +60,9 @@ fn push_sausages() {
             orientation: SausageOrientation::Horizontal,
         }],
         neighbors: OnceCell::new(),
+        description: &description,
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::Y, &description);
+    state.push_sausages(IVec2::new(0, 0), IVec2::Y);
     assert_eq!(
         state,
         LevelState {
@@ -70,9 +74,10 @@ fn push_sausages() {
                 orientation: SausageOrientation::Horizontal,
             }],
             neighbors: OnceCell::new(),
+            description: &description,
         }
     );
-    state.push_sausages(IVec2::new(0, 1), -IVec2::Y, &description);
+    state.push_sausages(IVec2::new(0, 1), -IVec2::Y);
     assert_eq!(
         state,
         LevelState {
@@ -84,6 +89,7 @@ fn push_sausages() {
                 orientation: SausageOrientation::Horizontal,
             }],
             neighbors: OnceCell::new(),
+            description: &description,
         }
     );
 
@@ -103,8 +109,9 @@ fn push_sausages() {
             },
         ],
         neighbors: OnceCell::new(),
+        description: &description,
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::X, &description);
+    state.push_sausages(IVec2::new(0, 0), IVec2::X);
     assert_eq!(
         state,
         LevelState {
@@ -123,6 +130,7 @@ fn push_sausages() {
                 }
             ],
             neighbors: OnceCell::new(),
+            description: &description,
         }
     );
 
@@ -142,8 +150,9 @@ fn push_sausages() {
             },
         ],
         neighbors: OnceCell::new(),
+        description: &description,
     };
-    state.push_sausages(IVec2::new(0, 0), IVec2::X, &description);
+    state.push_sausages(IVec2::new(0, 0), IVec2::X);
     assert_eq!(
         state,
         LevelState {
@@ -162,6 +171,7 @@ fn push_sausages() {
                 }
             ],
             neighbors: OnceCell::new(),
+            description: &description,
         }
     );
 }
@@ -172,25 +182,19 @@ fn level_statuses() {
 {"start_pos":[1,2],"start_dir":[1,0],"ground":[[2,1],[3,1],[1,2],[2,2],[3,2]],"grills":[],"sausages":[{"pos":[4,1],"cooked":[[0,0],[0,0]],"orientation":"Vertical"}]}
     "#.trim()).unwrap();
     let lost_level = LevelState::from(&lost_description);
-    assert_eq!(lost_level.get_status(&lost_description), LevelStatus::Lost);
+    assert_eq!(lost_level.get_status(), LevelStatus::Lost);
 
     let solved_description: LevelDescription = serde_json::from_str(r#"
 {"start_pos":[1,2],"start_dir":[1,0],"ground":[[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2]],"grills":[],"sausages":[{"pos":[4,1],"cooked":[[1,1],[1,1]],"orientation":"Vertical"}]}
     "#.trim()).unwrap();
     let solved_level = LevelState::from(&solved_description);
-    assert_eq!(
-        solved_level.get_status(&solved_description),
-        LevelStatus::Solution
-    );
+    assert_eq!(solved_level.get_status(), LevelStatus::Solution);
 
     let burnt_description: LevelDescription = serde_json::from_str(r#"
 {"start_pos":[1,2],"start_dir":[1,0],"ground":[[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2]],"grills":[],"sausages":[{"pos":[4,1],"cooked":[[2,2],[2,2]],"orientation":"Vertical"}]}
     "#.trim()).unwrap();
     let burnt_level = LevelState::from(&burnt_description);
-    assert_eq!(
-        burnt_level.get_status(&burnt_description),
-        LevelStatus::Burnt
-    );
+    assert_eq!(burnt_level.get_status(), LevelStatus::Burnt);
 }
 
 #[test]

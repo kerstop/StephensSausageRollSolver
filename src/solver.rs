@@ -43,35 +43,38 @@ impl LevelDescription {
 }
 
 #[derive(Debug, Clone)]
-pub struct LevelState {
+pub struct LevelState<'a> {
     player_pos: IVec2,
     player_dir: IVec2,
     sausages: Vec<Sausage>,
-    neighbors: OnceCell<NodeNeighbors>,
+    neighbors: OnceCell<NodeNeighbors<'a>>,
+    description: &'a LevelDescription,
 }
 
-impl Serialize for LevelState {
+impl Serialize for LevelState<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let mut s = serializer.serialize_map(Some(5))?;
+        let mut s = serializer.serialize_map(Some(6))?;
         s.serialize_entry("id", &self.get_id());
         s.serialize_entry("player_pos", &self.player_pos);
         s.serialize_entry("player_dir", &self.player_dir);
         s.serialize_entry("sausages", &self.sausages);
         s.serialize_entry("neighbors", &self.neighbors.get());
+        s.serialize_entry("status", &self.get_status());
         s.end()
     }
 }
 
-impl From<&LevelDescription> for LevelState {
-    fn from(value: &LevelDescription) -> Self {
+impl<'a> From<&'a LevelDescription> for LevelState<'a> {
+    fn from(value: &'a LevelDescription) -> Self {
         LevelState {
             player_pos: value.start_pos,
             player_dir: value.start_dir,
             sausages: value.sausages.clone(),
             neighbors: OnceCell::new(),
+            description: value,
         }
     }
 }
@@ -85,14 +88,14 @@ pub enum LevelStatus {
 }
 
 #[derive(Debug, Clone)]
-struct NodeNeighbors {
-    forward: Weak<LevelState>,
-    back: Weak<LevelState>,
-    right: Weak<LevelState>,
-    left: Weak<LevelState>,
+struct NodeNeighbors<'a> {
+    forward: Weak<LevelState<'a>>,
+    back: Weak<LevelState<'a>>,
+    right: Weak<LevelState<'a>>,
+    left: Weak<LevelState<'a>>,
 }
 
-impl Serialize for NodeNeighbors {
+impl Serialize for NodeNeighbors<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -112,22 +115,22 @@ impl Serialize for NodeNeighbors {
     }
 }
 
-impl Hash for LevelState {
+impl Hash for LevelState<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.player_pos.hash(state);
         self.player_dir.hash(state);
         self.sausages.hash(state);
     }
 }
-impl PartialEq for LevelState {
+impl PartialEq for LevelState<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.player_pos == other.player_pos
             && self.player_dir == other.player_dir
             && self.sausages == other.sausages
     }
 }
-impl Eq for LevelState {}
-impl LevelState {
+impl Eq for LevelState<'_> {}
+impl<'a> LevelState<'a> {
     fn get_sausage(&self, pos: IVec2) -> Option<&Sausage> {
         self.sausages
             .iter()
@@ -140,9 +143,9 @@ impl LevelState {
             .find(|s| s.pos == pos || s.pos + IVec2::from(s.orientation) == pos)
     }
 
-    fn get_status(&self, description: &LevelDescription) -> LevelStatus {
-        let ground = &description.ground;
-        let grills = &description.grills;
+    fn get_status(&self) -> LevelStatus {
+        let ground = &self.description.ground;
+        let grills = &self.description.grills;
         // no sausages Lost
         for sausage in &self.sausages {
             let sausage_pos_1 = sausage.pos;
@@ -171,8 +174,8 @@ impl LevelState {
         // win?
         if self.sausages.iter().all(|s| {
             s.cooked[0][0] == 1 || s.cooked[0][1] == 1 || s.cooked[1][0] == 1 || s.cooked[1][1] == 1
-        }) && self.player_pos == description.start_pos
-            && self.player_dir == description.start_dir
+        }) && self.player_pos == self.description.start_pos
+            && self.player_dir == self.description.start_dir
         {
             return LevelStatus::Solution;
         }
@@ -180,7 +183,7 @@ impl LevelState {
         LevelStatus::Unsolved
     }
 
-    fn push_sausages(&mut self, pos: IVec2, dir: IVec2, description: &LevelDescription) {
+    fn push_sausages(&mut self, pos: IVec2, dir: IVec2) {
         let (i, sausage_to_push) = match self
             .sausages
             .iter_mut()
@@ -199,22 +202,23 @@ impl LevelState {
                 sausage_to_push.pos + dir,
                 sausage_to_push.pos + IVec2::from(sausage_to_push.orientation) + dir,
             ];
-            self.push_sausages(tiles_to_clear[0], dir, description);
-            self.push_sausages(tiles_to_clear[1], dir, description);
+            self.push_sausages(tiles_to_clear[0], dir);
+            self.push_sausages(tiles_to_clear[1], dir);
         } else {
             //sliding
             let sausage_pos = sausage_to_push.pos;
             if dir == IVec2::from(sausage_to_push.orientation) {
-                self.push_sausages(sausage_pos + (dir * 2), dir, description)
+                self.push_sausages(sausage_pos + (dir * 2), dir)
             } else {
-                self.push_sausages(sausage_pos + dir, dir, description);
+                self.push_sausages(sausage_pos + dir, dir);
             }
         }
         self.sausages[i].pos += dir;
-        if description.grills.contains(&self.sausages[i].pos) {
+        if self.description.grills.contains(&self.sausages[i].pos) {
             self.sausages[i].cooked[0][0] += 1
         }
-        if description
+        if self
+            .description
             .grills
             .contains(&(self.sausages[i].pos + IVec2::from(self.sausages[i].orientation)))
         {
@@ -222,7 +226,7 @@ impl LevelState {
         }
     }
 
-    fn get_next_state(&self, description: &LevelDescription, input: IVec2) -> LevelState {
+    fn get_next_state(&self, description: &'a LevelDescription, input: IVec2) -> LevelState<'a> {
         let mut state = self.clone();
 
         match input {
@@ -236,41 +240,25 @@ impl LevelState {
         if self.player_dir == input
             && description.get_tile_type(self.player_pos + input) != TileType::Water
         {
-            state.push_sausages(
-                state.player_pos + (state.player_dir * 2),
-                state.player_dir,
-                description,
-            );
+            state.push_sausages(state.player_pos + (state.player_dir * 2), state.player_dir);
             state.player_pos += state.player_dir;
         }
         if -self.player_dir == input
             && description.get_tile_type(self.player_pos - self.player_dir) != TileType::Water
         {
-            state.push_sausages(
-                state.player_pos - state.player_dir,
-                -state.player_dir,
-                description,
-            );
+            state.push_sausages(state.player_pos - state.player_dir, -state.player_dir);
             state.player_pos -= state.player_dir;
         }
         if self.player_dir.perp() == input {
             let perp = self.player_dir.perp();
-            state.push_sausages(
-                state.player_pos + state.player_dir + perp,
-                perp,
-                description,
-            );
-            state.push_sausages(state.player_pos + perp, -state.player_dir, description);
+            state.push_sausages(state.player_pos + state.player_dir + perp, perp);
+            state.push_sausages(state.player_pos + perp, -state.player_dir);
             state.player_dir = perp;
         }
         if -self.player_dir.perp() == input {
             let perp = -self.player_dir.perp();
-            state.push_sausages(
-                state.player_pos + state.player_dir + perp,
-                perp,
-                description,
-            );
-            state.push_sausages(state.player_pos + perp, -state.player_dir, description);
+            state.push_sausages(state.player_pos + state.player_dir + perp, perp);
+            state.push_sausages(state.player_pos + perp, -state.player_dir);
             state.player_dir = perp;
         }
 
@@ -282,7 +270,7 @@ impl LevelState {
     }
 }
 
-impl LevelState {
+impl LevelState<'_> {
     pub fn get_id(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
@@ -290,12 +278,12 @@ impl LevelState {
     }
 }
 
-pub struct LevelGraph {
-    states: HashSet<Rc<LevelState>>,
-    initial_state: Rc<LevelState>,
+pub struct LevelGraph<'a> {
+    states: HashSet<Rc<LevelState<'a>>>,
+    initial_state: Rc<LevelState<'a>>,
 }
 
-impl Serialize for LevelGraph {
+impl Serialize for LevelGraph<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -309,13 +297,40 @@ impl Serialize for LevelGraph {
                 .map(|l| l.as_ref())
                 .collect::<Vec<&LevelState>>(),
         );
-        let mut edges = Vec::new();
-        self.states.iter().for_each(|s| {
+        #[derive(Serialize, Debug)]
+        struct Edge {
+            id: usize,
+            source: u64,
+            target: u64,
+            movement: &'static str,
+        }
+        let mut edges: Vec<Edge> = Vec::new();
+        self.states.iter().enumerate().for_each(|(i, s)| {
             if let Some(n) = s.neighbors.get() {
-                edges.push((s.get_id(), n.forward.upgrade().unwrap().get_id()));
-                edges.push((s.get_id(), n.back.upgrade().unwrap().get_id()));
-                edges.push((s.get_id(), n.right.upgrade().unwrap().get_id()));
-                edges.push((s.get_id(), n.left.upgrade().unwrap().get_id()));
+                edges.push(Edge {
+                    id: i * 4 + 1,
+                    source: s.get_id(),
+                    target: n.forward.upgrade().unwrap().get_id(),
+                    movement: "forward",
+                });
+                edges.push(Edge {
+                    id: i * 4 + 2,
+                    source: s.get_id(),
+                    target: n.back.upgrade().unwrap().get_id(),
+                    movement: "back",
+                });
+                edges.push(Edge {
+                    id: i * 4 + 3,
+                    source: s.get_id(),
+                    target: n.right.upgrade().unwrap().get_id(),
+                    movement: "right",
+                });
+                edges.push(Edge {
+                    id: i * 4 + 4,
+                    source: s.get_id(),
+                    target: n.left.upgrade().unwrap().get_id(),
+                    movement: "left",
+                });
             }
         });
         s.serialize_entry("edges", &edges);
@@ -380,10 +395,10 @@ pub fn solve(level_description: JsValue) -> String {
     serde_json::to_string(&generate_graph(&parsed)).unwrap()
 }
 
-pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
+pub fn generate_graph<'a>(level_description: &'a LevelDescription) -> LevelGraph<'a> {
     let initial_state = Rc::new(LevelState::from(level_description));
     #[allow(clippy::mutable_key_type)]
-    let mut states = HashSet::new();
+    let mut states: HashSet<Rc<LevelState<'a>>> = HashSet::new();
     states.insert(Rc::clone(&initial_state));
 
     let mut exploration_queue: VecDeque<Rc<LevelState>> = VecDeque::new();
@@ -395,17 +410,14 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
         println!("{:?} node neighbors value", current_state.neighbors);
         println!("{} nodes in queue", exploration_queue.len());
         println!("{} unique states found", states.len());
-        println!(
-            "current node status is {:?}",
-            current_state.get_status(level_description)
-        );
+        println!("current node status is {:?}", current_state.get_status());
         println!("{}", serde_json::to_string(current_state.as_ref()).unwrap());
         if current_state.neighbors.get().is_some() {
             println!("node previously explored");
             continue;
         }
 
-        match current_state.get_status(level_description) {
+        match current_state.get_status() {
             LevelStatus::Lost => continue,
             LevelStatus::Solution => continue,
             LevelStatus::Burnt => continue,
@@ -417,14 +429,14 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
                 Rc::new(current_state.get_next_state(level_description, current_state.player_dir));
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(&saved_state)
+            Rc::downgrade(saved_state)
         };
         let back: Weak<LevelState> = {
             let new_state =
                 Rc::new(current_state.get_next_state(level_description, -current_state.player_dir));
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(&saved_state)
+            Rc::downgrade(saved_state)
         };
         let right: Weak<LevelState> = {
             let new_state = Rc::new(
@@ -432,7 +444,7 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
             );
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(&saved_state)
+            Rc::downgrade(saved_state)
         };
         let left: Weak<LevelState> = {
             let new_state = Rc::new(
@@ -440,7 +452,7 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
             );
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(&saved_state)
+            Rc::downgrade(saved_state)
         };
 
         current_state

@@ -22,12 +22,20 @@ export interface LevelState {
   player_dir: IVec2;
   sausages: Sausage[];
   neighbors: NodeNeighbors | null;
+  status: "Lost" | "Unsolved" | "Solved" | "Burnt";
+}
+
+export interface Edge {
+  id: number;
+  source: number;
+  target: number;
+  movement: string;
 }
 
 export interface LevelGraph {
   states: LevelState[];
-  edges: [number, number][];
-  initial_state: number;
+  edges: Edge[];
+  initial_state: LevelState;
 }
 
 export interface LevelDescription {
