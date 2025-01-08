@@ -56,12 +56,11 @@ impl Serialize for LevelState<'_> {
     where
         S: serde::Serializer,
     {
-        let mut s = serializer.serialize_map(Some(6))?;
+        let mut s = serializer.serialize_map(Some(5))?;
         s.serialize_entry("id", &self.get_id());
         s.serialize_entry("player_pos", &self.player_pos);
         s.serialize_entry("player_dir", &self.player_dir);
         s.serialize_entry("sausages", &self.sausages);
-        s.serialize_entry("neighbors", &self.neighbors.get());
         s.serialize_entry("status", &self.get_status());
         s.end()
     }
@@ -281,6 +280,7 @@ impl LevelState<'_> {
 pub struct LevelGraph<'a> {
     states: HashSet<Rc<LevelState<'a>>>,
     initial_state: Rc<LevelState<'a>>,
+    level_description: LevelDescription,
 }
 
 impl Serialize for LevelGraph<'_> {
@@ -335,6 +335,7 @@ impl Serialize for LevelGraph<'_> {
         });
         s.serialize_entry("edges", &edges);
         s.serialize_entry("initial_state", self.initial_state.as_ref());
+        s.serialize_entry("level_description", &self.level_description);
         s.end()
     }
 }
@@ -469,5 +470,6 @@ pub fn generate_graph<'a>(level_description: &'a LevelDescription) -> LevelGraph
     LevelGraph {
         states,
         initial_state,
+        level_description: level_description.clone(),
     }
 }

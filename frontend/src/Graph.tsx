@@ -94,14 +94,19 @@ function Graph({ level, description }: Args) {
   return (
     <>
       <div ref={graph} className="cytoscape-target"></div>
+      <p>generated level graph</p>
+      <textarea>{JSON.stringify(level)}</textarea>
+      <br />
       {viewedState !== null ? (
-        <LevelDisplay
-          level={viewedState}
-          size={[10, 10]}
-          description={description}
-        />
+        <>
+          <LevelDisplay
+            level={viewedState}
+            size={[10, 10]}
+            description={description}
+          />
+        </>
       ) : (
-        "Select a Node"
+        <p>Select a Node to view the state</p>
       )}
     </>
   );

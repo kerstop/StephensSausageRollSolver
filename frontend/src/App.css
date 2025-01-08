@@ -56,3 +56,18 @@
   background-color: hsl(from #242424 h s calc(l + 10));
   border-radius: 20px;
 }
+
+code {
+  display: block;
+  width: 500px;
+  height: 150px;
+  border: 1px solid white;
+  border-radius: 5px;
+  margin-inline: auto;
+  scroll-behavior: auto;
+}
+
+.tilegrid {
+  display: inline-block;
+  margin-inline: auto;
+}

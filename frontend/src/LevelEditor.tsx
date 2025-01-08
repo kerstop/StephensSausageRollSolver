@@ -136,81 +136,84 @@ function LevelEditor({ showLevel }: Args) {
           </button>
         </div>
       </div>
-      {tileTypes.map((row, y) => {
-        return (
-          <div className="row" key={y}>
-            {row.map((tileType, x) => {
-              return (
-                <div
-                  key={x}
-                  className={`tile ${tileType} `}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "copy";
-                  }}
-                  onDrop={(e) => {
-                    let data = e.dataTransfer.getData("internal");
-                    if (data.length > 0) {
-                      switch (data) {
-                        case "horizontal":
-                          setSausages([
-                            ...sausages,
-                            {
-                              pos: [x, y],
-                              cooked: [
-                                [0, 0],
-                                [0, 0],
-                              ],
-                              orientation: "Horizontal",
-                            },
-                          ]);
-                          break;
-                        case "vertical":
-                          setSausages([
-                            ...sausages,
-                            {
-                              pos: [x, y],
-                              cooked: [
-                                [0, 0],
-                                [0, 0],
-                              ],
-                              orientation: "Vertical",
-                            },
-                          ]);
-                          break;
-                        case "player":
-                          setPlayerPos([x, y]);
-                          break;
+      <div className="tilegrid">
+        {tileTypes.map((row, y) => {
+          return (
+            <div className="row" key={y}>
+              {row.map((tileType, x) => {
+                return (
+                  <div
+                    key={x}
+                    className={`tile ${tileType} `}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                    }}
+                    onDrop={(e) => {
+                      let data = e.dataTransfer.getData("internal");
+                      if (data.length > 0) {
+                        switch (data) {
+                          case "horizontal":
+                            setSausages([
+                              ...sausages,
+                              {
+                                pos: [x, y],
+                                cooked: [
+                                  [0, 0],
+                                  [0, 0],
+                                ],
+                                orientation: "Horizontal",
+                              },
+                            ]);
+                            break;
+                          case "vertical":
+                            setSausages([
+                              ...sausages,
+                              {
+                                pos: [x, y],
+                                cooked: [
+                                  [0, 0],
+                                  [0, 0],
+                                ],
+                                orientation: "Vertical",
+                              },
+                            ]);
+                            break;
+                          case "player":
+                            setPlayerPos([x, y]);
+                            break;
+                        }
                       }
-                    }
-                  }}
-                  onClick={() => {
-                    if (tool === "water") {
-                      tileTypes[y][x] = "water";
-                      setTileTypes([...tileTypes]);
-                    }
-                    if (tool === "ground") {
-                      tileTypes[y][x] = "ground";
-                      setTileTypes([...tileTypes]);
-                    }
-                    if (tool === "grill") {
-                      tileTypes[y][x] = "grill";
-                      setTileTypes([...tileTypes]);
-                    }
-                  }}
-                >
-                  {sausages.map((s) => {
-                    if (s.pos[0] === x && s.pos[1] === y) {
-                      return s.orientation === "Vertical" ? "V" : "H";
-                    }
-                  })}
-                  {playerPos?.[0] === x && playerPos[1] === y ? "P" : ""}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+                    }}
+                    onClick={() => {
+                      if (tool === "water") {
+                        tileTypes[y][x] = "water";
+                        setTileTypes([...tileTypes]);
+                      }
+                      if (tool === "ground") {
+                        tileTypes[y][x] = "ground";
+                        setTileTypes([...tileTypes]);
+                      }
+                      if (tool === "grill") {
+                        tileTypes[y][x] = "grill";
+                        setTileTypes([...tileTypes]);
+                      }
+                    }}
+                  >
+                    {sausages.map((s) => {
+                      if (s.pos[0] === x && s.pos[1] === y) {
+                        return s.orientation === "Vertical" ? "V" : "H";
+                      }
+                    })}
+                    {playerPos?.[0] === x && playerPos[1] === y ? "P" : ""}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+      <p>LevelDescription</p>
       <textarea
         readOnly={true}
         value={JSON.stringify(levelDescription)}
