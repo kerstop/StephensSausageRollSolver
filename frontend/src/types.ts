@@ -35,15 +35,14 @@ export interface Edge {
 export interface LevelGraph {
   states: LevelState[];
   edges: Edge[];
-  initial_state: LevelDescription;
+  initial_state: LevelState;
   level_description: LevelDescription;
 }
 
 export interface LevelDescription {
-  id: number;
   start_pos: IVec2;
   start_dir: IVec2;
   ground: IVec2[];
   grills: IVec2[];
-  sausages: IVec2[];
+  sausages: Sausage[];
 }

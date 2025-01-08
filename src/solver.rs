@@ -249,16 +249,22 @@ impl<'a> LevelState<'a> {
             state.player_pos -= state.player_dir;
         }
         if self.player_dir.perp() == input {
-            let perp = self.player_dir.perp();
-            state.push_sausages(state.player_pos + state.player_dir + perp, perp);
-            state.push_sausages(state.player_pos + perp, -state.player_dir);
-            state.player_dir = perp;
+            let fork_to_occupy = self.player_dir.perp();
+            state.push_sausages(
+                state.player_pos + state.player_dir + fork_to_occupy,
+                fork_to_occupy,
+            );
+            state.push_sausages(state.player_pos + fork_to_occupy, -state.player_dir);
+            state.player_dir = fork_to_occupy;
         }
         if -self.player_dir.perp() == input {
-            let perp = -self.player_dir.perp();
-            state.push_sausages(state.player_pos + state.player_dir + perp, perp);
-            state.push_sausages(state.player_pos + perp, -state.player_dir);
-            state.player_dir = -perp;
+            let fork_to_occupy = -self.player_dir.perp();
+            state.push_sausages(
+                state.player_pos + state.player_dir + fork_to_occupy,
+                fork_to_occupy,
+            );
+            state.push_sausages(state.player_pos + fork_to_occupy, -state.player_dir);
+            state.player_dir = fork_to_occupy;
         }
 
         if description.grills.contains(&state.player_pos) {

@@ -60,11 +60,11 @@
 code {
   display: block;
   width: 500px;
-  height: 150px;
   border: 1px solid white;
   border-radius: 5px;
   margin-inline: auto;
-  scroll-behavior: auto;
+  max-height: 150px;
+  overflow-y: auto;
 }
 
 .tilegrid {

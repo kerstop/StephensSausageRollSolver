@@ -5,10 +5,9 @@ import LevelDisplay from "./LevelDisplay";
 
 interface Args {
   level: LevelGraph;
-  description: LevelDescription;
 }
 
-function Graph({ level, description }: Args) {
+function Graph({ level }: Args) {
   const nodes: ElementDefinition[] = (() => {
     return level.states.map((state, i) => {
       return { data: { id: state.id.toString(), level: state } };
@@ -87,14 +86,14 @@ function Graph({ level, description }: Args) {
     <>
       <div ref={graph} className="cytoscape-target"></div>
       <p>generated level graph</p>
-      <textarea>{JSON.stringify(level)}</textarea>
+      <code>{JSON.stringify(level)}</code>
       <br />
       {viewedState !== null ? (
         <>
           <LevelDisplay
             level={viewedState}
             size={[10, 10]}
-            description={description}
+            description={level.level_description}
           />
         </>
       ) : (

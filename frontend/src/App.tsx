@@ -6,23 +6,12 @@ import { IVec2, LevelDescription, LevelGraph } from "./types";
 import LevelEditor from "./LevelEditor";
 
 function App() {
-  const [descriptonToSolve, setDescriptionToSolve] =
-    useState<null | LevelDescription>(null);
-
-  const solution: LevelGraph = useMemo(
-    () =>
-      descriptonToSolve !== null ? JSON.parse(solve(descriptonToSolve)) : null,
-    [descriptonToSolve],
-  );
+  const [solution, setSolution] = useState<LevelGraph | null>(null);
 
   return (
     <>
-      <LevelEditor showLevel={setDescriptionToSolve} />
-      {solution !== null && descriptonToSolve !== null ? (
-        <Graph level={solution} description={descriptonToSolve} />
-      ) : (
-        ""
-      )}
+      <LevelEditor setSolution={setSolution} width={10} height={10} />
+      {solution !== null ? <Graph level={solution} /> : ""}
     </>
   );
 }
