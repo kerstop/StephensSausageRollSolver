@@ -33,23 +33,15 @@ function Graph({ level, description }: Args) {
       style: [
         {
           selector: "edge",
-          style: { "font-size": "0.8em", "curve-style": "bezier" },
+          style: {
+            "font-size": "0.8em",
+            "curve-style": "bezier",
+            "target-arrow-shape": "triangle",
+          },
         },
         {
-          selector: "edge[movement = 'forward']",
-          style: { label: "forward" },
-        },
-        {
-          selector: "edge[movement = 'back']",
-          style: { label: "back" },
-        },
-        {
-          selector: "edge[movement = 'left']",
-          style: { label: "left" },
-        },
-        {
-          selector: "edge[movement = 'right']",
-          style: { label: "right" },
+          selector: "edge[movement]",
+          style: { label: "data(movement)" },
         },
         {
           selector: `node[id = "${level.initial_state.id.toString()}"]`,
@@ -71,7 +63,7 @@ function Graph({ level, description }: Args) {
           },
         },
         {
-          selector: `node[level.status = "Solved"]`,
+          selector: `node[level.status = "Solution"]`,
           style: {
             "background-color": "green",
           },

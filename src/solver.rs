@@ -172,7 +172,7 @@ impl<'a> LevelState<'a> {
         }
         // win?
         if self.sausages.iter().all(|s| {
-            s.cooked[0][0] == 1 || s.cooked[0][1] == 1 || s.cooked[1][0] == 1 || s.cooked[1][1] == 1
+            s.cooked[0][0] == 1 && s.cooked[0][1] == 1 && s.cooked[1][0] == 1 && s.cooked[1][1] == 1
         }) && self.player_pos == self.description.start_pos
             && self.player_dir == self.description.start_dir
         {
@@ -258,7 +258,7 @@ impl<'a> LevelState<'a> {
             let perp = -self.player_dir.perp();
             state.push_sausages(state.player_pos + state.player_dir + perp, perp);
             state.push_sausages(state.player_pos + perp, -state.player_dir);
-            state.player_dir = perp;
+            state.player_dir = -perp;
         }
 
         if description.grills.contains(&state.player_pos) {
@@ -449,7 +449,7 @@ pub fn generate_graph<'a>(level_description: &'a LevelDescription) -> LevelGraph
         };
         let left: Weak<LevelState> = {
             let new_state = Rc::new(
-                current_state.get_next_state(level_description, current_state.player_dir.perp()),
+                current_state.get_next_state(level_description, -current_state.player_dir.perp()),
             );
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
