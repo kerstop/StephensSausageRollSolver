@@ -5,6 +5,15 @@
   text-align: center;
 }
 
+label {
+  input {
+    margin-inline: 0.5em;
+  }
+  input[type="number"] {
+    width: 8ch;
+  }
+}
+
 .row {
   display: flex;
   flex-direction: row;
@@ -15,6 +24,7 @@
   width: 30px;
   border: 1px solid hsl(from white h s 40%);
   margin: 2px;
+  user-select: none;
 }
 
 .water {
@@ -34,7 +44,7 @@
 }
 
 .air {
-  background-color: hsl(from blue h 70% 70% / 30%);
+  background-color: hsl(from blue h 40% l);
 }
 
 .player-direction-controls {

@@ -43,15 +43,15 @@ impl LevelDescription {
 }
 
 #[derive(Debug, Clone)]
-pub struct LevelState<'a> {
+pub struct LevelState {
     player_pos: IVec3,
     player_dir: IVec3,
     sausages: Vec<Sausage>,
-    neighbors: OnceCell<NodeNeighbors<'a>>,
-    description: &'a LevelDescription,
+    neighbors: OnceCell<NodeNeighbors>,
+    description: Rc<LevelDescription>,
 }
 
-impl Serialize for LevelState<'_> {
+impl Serialize for LevelState {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -66,14 +66,14 @@ impl Serialize for LevelState<'_> {
     }
 }
 
-impl<'a> From<&'a LevelDescription> for LevelState<'a> {
-    fn from(value: &'a LevelDescription) -> Self {
+impl From<&LevelDescription> for LevelState {
+    fn from(value: &LevelDescription) -> Self {
         LevelState {
             player_pos: value.start_pos,
             player_dir: value.start_dir,
             sausages: value.sausages.clone(),
             neighbors: OnceCell::new(),
-            description: value,
+            description: Rc::new(value.clone()),
         }
     }
 }
@@ -87,14 +87,14 @@ pub enum LevelStatus {
 }
 
 #[derive(Debug, Clone)]
-struct NodeNeighbors<'a> {
-    forward: Weak<LevelState<'a>>,
-    back: Weak<LevelState<'a>>,
-    right: Weak<LevelState<'a>>,
-    left: Weak<LevelState<'a>>,
+struct NodeNeighbors {
+    forward: Weak<LevelState>,
+    back: Weak<LevelState>,
+    right: Weak<LevelState>,
+    left: Weak<LevelState>,
 }
 
-impl Serialize for NodeNeighbors<'_> {
+impl Serialize for NodeNeighbors {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -114,22 +114,22 @@ impl Serialize for NodeNeighbors<'_> {
     }
 }
 
-impl Hash for LevelState<'_> {
+impl Hash for LevelState {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.player_pos.hash(state);
         self.player_dir.hash(state);
         self.sausages.hash(state);
     }
 }
-impl PartialEq for LevelState<'_> {
+impl PartialEq for LevelState {
     fn eq(&self, other: &Self) -> bool {
         self.player_pos == other.player_pos
             && self.player_dir == other.player_dir
             && self.sausages == other.sausages
     }
 }
-impl Eq for LevelState<'_> {}
-impl<'a> LevelState<'a> {
+impl Eq for LevelState {}
+impl<'a> LevelState {
     fn get_sausage(&self, pos: IVec3) -> Option<&Sausage> {
         self.sausages
             .iter()
@@ -225,7 +225,7 @@ impl<'a> LevelState<'a> {
         }
     }
 
-    fn get_next_state(&self, description: &'a LevelDescription, input: IVec3) -> LevelState<'a> {
+    fn get_next_state(&self, description: &'a LevelDescription, input: IVec3) -> LevelState {
         let mut state = self.clone();
 
         match input {
@@ -233,7 +233,7 @@ impl<'a> LevelState<'a> {
             IVec3 { x: 0, y: 1, z: 0 } => (),
             IVec3 { x: -1, y: 0, z: 0 } => (),
             IVec3 { x: 0, y: -1, z: 0 } => (),
-            _ => panic!("get_next_state was supplied a vector that was not a basis vector"),
+            _ => panic!("get_next_state was supplied a vector that was not a valid input"),
         };
 
         if self.player_dir == input
@@ -275,7 +275,7 @@ impl<'a> LevelState<'a> {
     }
 }
 
-impl LevelState<'_> {
+impl LevelState {
     pub fn get_id(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
@@ -283,13 +283,13 @@ impl LevelState<'_> {
     }
 }
 
-pub struct LevelGraph<'a> {
-    states: HashSet<Rc<LevelState<'a>>>,
-    initial_state: Rc<LevelState<'a>>,
+pub struct LevelGraph {
+    states: HashSet<Rc<LevelState>>,
+    initial_state: Rc<LevelState>,
     level_description: LevelDescription,
 }
 
-impl Serialize for LevelGraph<'_> {
+impl Serialize for LevelGraph {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -402,10 +402,10 @@ pub fn solve(level_description: JsValue) -> String {
     serde_json::to_string(&generate_graph(&parsed)).unwrap()
 }
 
-pub fn generate_graph<'a>(level_description: &'a LevelDescription) -> LevelGraph<'a> {
+pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
     let initial_state = Rc::new(LevelState::from(level_description));
     #[allow(clippy::mutable_key_type)]
-    let mut states: HashSet<Rc<LevelState<'a>>> = HashSet::new();
+    let mut states: HashSet<Rc<LevelState>> = HashSet::new();
     states.insert(Rc::clone(&initial_state));
 
     let mut exploration_queue: VecDeque<Rc<LevelState>> = VecDeque::new();

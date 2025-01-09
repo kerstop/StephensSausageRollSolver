@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { IVec2, IVec3, LevelDescription, LevelGraph, Sausage } from "./types";
+import {
+  compareIVec3,
+  IVec3,
+  LevelDescription,
+  LevelGraph,
+  Sausage,
+} from "./types";
 import SolutionWorker from "./worker?worker";
 import { produce } from "immer";
 interface Args {
@@ -21,9 +27,9 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   const [tool, setTool] = useState<Tool>("remove");
 
   const [sausages, setSausages] = useState<Sausage[]>([]);
-  const [playerDir, setPlayerDir] = useState<"up" | "right" | "down" | "left">(
-    "up",
-  );
+  const [playerDir, setPlayerDir] = useState<
+    [0, -1, 0] | [1, 0, 0] | [0, 1, 0] | [-1, 0, 0]
+  >([0, -1, 0]);
   const [playerPos, setPlayerPos] = useState<IVec3 | null>(null);
   const [waiting, setWaiting] = useState<boolean>(false);
 
@@ -238,6 +244,13 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
           playerPos[2] === viewedLayer
             ? "P"
             : ""}
+          {playerPos !== null
+            ? playerPos[0] + playerDir[0] === x &&
+              playerPos[1] + playerDir[1] === y &&
+              playerPos[2] === viewedLayer
+              ? "F"
+              : ""
+            : ""}
         </div>,
       );
     }
@@ -267,21 +280,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   }, [worker]);
 
   const levelDescription = (() => {
-    let playerDirVector = [1, 0, 0];
-    switch (playerDir) {
-      case "up":
-        playerDirVector = [0, -1, 0];
-        break;
-      case "right":
-        playerDirVector = [1, 0, 0];
-        break;
-      case "down":
-        playerDirVector = [0, 1, 0];
-        break;
-      case "left":
-        playerDirVector = [-1, 0, 0];
-        break;
-    }
+    let playerDirVector = JSON.stringify(playerDir);
 
     let ground: IVec3[] = [...groundTiles].map((t) => {
       return JSON.parse(t) as IVec3;
@@ -307,13 +306,12 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
           const data = JSON.parse(
             e.get("data")?.toString() ?? "{}",
           ) as LevelDescription;
-          if (JSON.stringify(data.start_dir) === "[1,0,0]")
-            setPlayerDir("right");
-          if (JSON.stringify(data.start_dir) === "[-1,0,0]")
-            setPlayerDir("left");
-          if (JSON.stringify(data.start_dir) === "[0,1,0]")
-            setPlayerDir("down");
-          if (JSON.stringify(data.start_dir) === "[0,-1,0]") setPlayerDir("up");
+          if (compareIVec3(data.start_dir, [1, 0, 0])) setPlayerDir([1, 0, 0]);
+          if (compareIVec3(data.start_dir, [-1, 0, 0]))
+            setPlayerDir([-1, 0, 0]);
+          if (compareIVec3(data.start_dir, [0, 1, 0])) setPlayerDir([0, 1, 0]);
+          if (compareIVec3(data.start_dir, [0, -1, 0]))
+            setPlayerDir([0, -1, 0]);
 
           setPlayerPos(data.start_pos);
           setSausages(data.sausages);
@@ -377,33 +375,33 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
         </button>
         <div className="player-direction-controls">
           <button
-            className={playerDir === "up" ? "active" : ""}
+            className={compareIVec3(playerDir, [0, -1, 0]) ? "active" : ""}
             onClick={() => {
-              setPlayerDir("up");
+              setPlayerDir([0, -1, 0]);
             }}
           >
             Up
           </button>
           <button
-            className={playerDir === "left" ? "active" : ""}
+            className={compareIVec3(playerDir, [-1, 0, 0]) ? "active" : ""}
             onClick={() => {
-              setPlayerDir("left");
+              setPlayerDir([-1, 0, 0]);
             }}
           >
             Left
           </button>
           <button
-            className={playerDir === "right" ? "active" : ""}
+            className={compareIVec3(playerDir, [1, 0, 0]) ? "active" : ""}
             onClick={() => {
-              setPlayerDir("right");
+              setPlayerDir([1, 0, 0]);
             }}
           >
             right
           </button>
           <button
-            className={playerDir === "down" ? "active" : ""}
+            className={compareIVec3(playerDir, [0, 1, 0]) ? "active" : ""}
             onClick={() => {
-              setPlayerDir("down");
+              setPlayerDir([0, 1, 0]);
             }}
           >
             down

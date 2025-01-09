@@ -1,5 +1,12 @@
 use super::*;
-use std::cell::OnceCell;
+use std::{cell::OnceCell, str::FromStr};
+
+fn level_state_from_json(json: &'static str) -> LevelState {
+    let level_description: LevelDescription =
+        serde_json::from_str(json).expect("json should contain a valid level description");
+    LevelState::from(&level_description)
+}
+
 #[test]
 fn push_sausages() {
     let description = LevelDescription {
