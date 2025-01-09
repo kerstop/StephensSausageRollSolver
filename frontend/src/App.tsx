@@ -10,7 +10,7 @@ function App() {
 
   return (
     <>
-      <LevelEditor setSolution={setSolution} lenX={10} lenY={10} lenZ={2} />
+      <LevelEditor setSolution={setSolution} lenX={10} lenY={10} lenZ={3} />
       {solution !== null ? <Graph level={solution} /> : ""}
     </>
   );

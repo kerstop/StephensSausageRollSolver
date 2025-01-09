@@ -9,15 +9,16 @@ interface Args {
   lenZ: number;
 }
 
-type Tool = "water" | "ground" | "grill";
+type Tool = "remove" | "grass" | "dirt" | "grill";
 
 function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   const worker = useRef(new SolutionWorker());
 
   const [groundTiles, setGroundTiles] = useState<Set<string>>(new Set());
   const [grillTiles, setGrillTiles] = useState<Set<string>>(new Set());
+  const [viewedLayer, setViewedLayer] = useState<number>(1);
 
-  const [tool, setTool] = useState<Tool>("water");
+  const [tool, setTool] = useState<Tool>("remove");
 
   const [sausages, setSausages] = useState<Sausage[]>([]);
   const [playerDir, setPlayerDir] = useState<"up" | "right" | "down" | "left">(
@@ -26,125 +27,235 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   const [playerPos, setPlayerPos] = useState<IVec3 | null>(null);
   const [waiting, setWaiting] = useState<boolean>(false);
 
-  const tiles = [];
+  const getSausageAt: (x: number, y: number, z: number) => Sausage | null = (
+    x: number,
+    y: number,
+    z: number,
+  ) => {
+    return (
+      sausages.find((s) => {
+        if (s.pos[0] === x && s.pos[1] === y && s.pos[2] === z) {
+          return true;
+        }
+        if (
+          s.pos[0] === x - 1 &&
+          s.pos[1] === y &&
+          s.pos[2] === z &&
+          s.orientation === "Horizontal"
+        ) {
+          return true;
+        }
+        if (
+          s.pos[0] === x &&
+          s.pos[1] === y - 1 &&
+          s.pos[2] === viewedLayer &&
+          s.orientation === "Vertical"
+        ) {
+          return true;
+        }
+        return false;
+      }) ?? null
+    );
+  };
 
-  for (let z = 0; z < lenZ; z++) {
-    for (let y = 0; y < lenY; y++) {
-      const row = [];
-      for (let x = 0; x < lenX; x++) {
-        let tileType = "water";
-        if (groundTiles.has(JSON.stringify([x, y, z]))) tileType = "ground";
-        if (grillTiles.has(JSON.stringify([x, y, z]))) tileType = "grill";
-        row.push(
-          <div
-            key={x}
-            className={`tile ${tileType} `}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "copy";
-            }}
-            onDrop={(e) => {
-              let data = e.dataTransfer.getData("internal");
-              if (data.length > 0) {
-                switch (data) {
-                  case "horizontal":
-                    setSausages([
-                      ...sausages,
-                      {
-                        pos: [x, y, z],
+  const clearTile: (x: number, y: number, z: number) => void = (
+    x: number,
+    y: number,
+    z: number,
+  ) => {
+    let sausageToRemove = getSausageAt(x, y, z);
+    if (sausageToRemove !== null) {
+      setSausages(
+        produce(sausages, (sausages) => {
+          sausages.filter(
+            (s) =>
+              JSON.stringify(s.pos) !== JSON.stringify(sausageToRemove.pos),
+          );
+          return sausages;
+        }),
+      );
+    }
+    if (JSON.stringify(playerPos) === JSON.stringify([x, y, z])) {
+      setPlayerPos(null);
+    }
+    if (groundTiles.has(JSON.stringify([x, y, z]))) {
+      setGroundTiles(
+        produce(groundTiles, (s) => {
+          s.delete(JSON.stringify([x, y, z]));
+        }),
+      );
+    }
+    if (grillTiles.has(JSON.stringify([x, y, z]))) {
+      setGrillTiles(
+        produce(grillTiles, (s) => {
+          s.delete(JSON.stringify([x, y, z]));
+        }),
+      );
+    }
+  };
+
+  const tiles = [];
+  for (let y = 0; y < lenY; y++) {
+    const row = [];
+    for (let x = 0; x < lenX; x++) {
+      let tileType;
+      if (groundTiles.has(JSON.stringify([x, y, viewedLayer])))
+        tileType = "dirt";
+      else if (grillTiles.has(JSON.stringify([x, y, viewedLayer])))
+        tileType = "dirt";
+      else if (groundTiles.has(JSON.stringify([x, y, viewedLayer - 1])))
+        tileType = "grass";
+      else if (grillTiles.has(JSON.stringify([x, y, viewedLayer - 1])))
+        tileType = "grill";
+      else {
+        if (viewedLayer > 1) tileType = "air";
+        else tileType = "water";
+      }
+      row.push(
+        <div
+          key={x}
+          className={`tile ${tileType} `}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(e) => {
+            let data = e.dataTransfer.getData("internal");
+            if (data.length > 0) {
+              switch (data) {
+                case "horizontal":
+                  clearTile(x, y, viewedLayer);
+                  clearTile(x + 1, y, viewedLayer);
+                  setSausages(
+                    produce(sausages, (sausages) => {
+                      sausages.push({
+                        pos: [x, y, viewedLayer],
                         cooked: [
                           [0, 0],
                           [0, 0],
                         ],
                         orientation: "Horizontal",
-                      },
-                    ]);
-                    break;
-                  case "vertical":
-                    setSausages([
-                      ...sausages,
-                      {
-                        pos: [x, y, z],
+                      });
+                    }),
+                  );
+                  break;
+                case "vertical":
+                  clearTile(x, y, viewedLayer);
+                  clearTile(x, y + 1, viewedLayer);
+                  setSausages(
+                    produce(sausages, (sausages) => {
+                      sausages.push({
+                        pos: [x, y, viewedLayer],
                         cooked: [
                           [0, 0],
                           [0, 0],
                         ],
                         orientation: "Vertical",
-                      },
-                    ]);
-                    break;
-                  case "player":
-                    setPlayerPos([x, y, z]);
-                    break;
-                }
+                      });
+                    }),
+                  );
+                  break;
+                case "player":
+                  clearTile(x, y, viewedLayer);
+                  setPlayerPos([x, y, viewedLayer]);
+                  break;
               }
-            }}
-            onClick={() => {
-              if (tool === "water") {
-                setGrillTiles(
-                  produce(grillTiles, (s) => {
-                    s.delete(JSON.stringify([x, y, z]));
+            }
+          }}
+          onClick={() => {
+            if (tool === "remove") {
+              let sausageToRemove = getSausageAt(x, y, viewedLayer);
+              if (sausageToRemove !== null) {
+                setSausages(
+                  produce(sausages, (sausages) => {
+                    sausages.filter(
+                      (s) =>
+                        JSON.stringify(s.pos) !==
+                        JSON.stringify(sausageToRemove.pos),
+                    );
+                    return sausages;
                   }),
                 );
-                setGroundTiles(
-                  produce(groundTiles, (s) => {
-                    s.delete(JSON.stringify([x, y, z]));
-                  }),
-                );
-              }
-              if (tool === "ground") {
-                setGrillTiles(
-                  produce(grillTiles, (s) => {
-                    s.delete(JSON.stringify([x, y, z]));
-                  }),
-                );
-                setGroundTiles(
-                  produce(groundTiles, (s) => {
-                    s.add(JSON.stringify([x, y, z]));
-                  }),
-                );
-              }
-              if (tool === "grill") {
-                setGrillTiles(
-                  produce(grillTiles, (s) => {
-                    s.add(JSON.stringify([x, y, z]));
-                  }),
-                );
-                setGroundTiles(
-                  produce(groundTiles, (s) => {
-                    s.delete(JSON.stringify([x, y, z]));
-                  }),
-                );
-              }
-            }}
-          >
-            {sausages.map((s) => {
-              if (s.pos[0] === x && s.pos[1] === y && s.pos[2] === z) {
-                return s.orientation === "Vertical" ? "V" : "H";
-              }
-              if (
-                s.pos[0] === x + 1 &&
-                s.pos[1] === y &&
-                s.pos[2] === z &&
-                s.orientation === "Horizontal"
+              } else if (
+                JSON.stringify(playerPos) ===
+                JSON.stringify([x, y, viewedLayer])
               ) {
-                return "H";
-              }
-              if (
-                s.pos[0] === x &&
-                s.pos[1] === y + 1 &&
-                s.pos[2] === z &&
-                s.orientation === "Vertical"
+                setPlayerPos(null);
+              } else if (groundTiles.has(JSON.stringify([x, y, viewedLayer]))) {
+                setGroundTiles(
+                  produce(groundTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, viewedLayer]));
+                  }),
+                );
+              } else if (
+                groundTiles.has(JSON.stringify([x, y, viewedLayer - 1]))
               ) {
-                return "V";
+                setGroundTiles(
+                  produce(groundTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, viewedLayer - 1]));
+                  }),
+                );
+              } else if (
+                grillTiles.has(JSON.stringify([x, y, viewedLayer - 1]))
+              ) {
+                setGrillTiles(
+                  produce(grillTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, viewedLayer - 1]));
+                  }),
+                );
               }
-            })}
-            {playerPos?.[0] === x && playerPos[1] === y ? "P" : ""}
-          </div>,
-        );
-      }
-      tiles.push(row);
+            } else if (tool === "dirt") {
+              clearTile(x, y, viewedLayer);
+              setGroundTiles(
+                produce(groundTiles, (s) => {
+                  s.add(JSON.stringify([x, y, viewedLayer]));
+                }),
+              );
+            } else if (tool === "grass") {
+              if (viewedLayer !== 0) {
+                clearTile(x, y, viewedLayer - 1);
+                setGroundTiles(
+                  produce(groundTiles, (s) => {
+                    s.add(JSON.stringify([x, y, viewedLayer - 1]));
+                  }),
+                );
+              }
+            } else if (tool === "grill") {
+              if (viewedLayer !== 0) {
+                clearTile(x, y, viewedLayer - 1);
+                setGrillTiles(
+                  produce(grillTiles, (s) => {
+                    s.add(JSON.stringify([x, y, viewedLayer - 1]));
+                  }),
+                );
+              }
+            }
+          }}
+        >
+          {getSausageAt(x, y, viewedLayer)?.orientation[0]}
+          {playerPos?.[0] === x &&
+          playerPos[1] === y &&
+          playerPos[2] === viewedLayer
+            ? "P"
+            : ""}
+        </div>,
+      );
     }
+    tiles.push(row);
+  }
+
+  const layersControls = [];
+  for (let i = 0; i < lenZ; i++) {
+    layersControls.push(
+      <button
+        className={`layer-control ${viewedLayer === i ? "active" : null}`}
+        onClick={() => {
+          setViewedLayer(i);
+        }}
+      >
+        {i === 0 ? "W" : i}
+      </button>,
+    );
   }
 
   useEffect(() => {
@@ -217,16 +328,22 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
       </form>
       <div className="controls">
         <button
-          className={tool === "water" ? "active" : ""}
-          onClick={() => setTool("water")}
+          className={tool === "remove" ? "active" : ""}
+          onClick={() => setTool("remove")}
         >
           Water
         </button>
         <button
-          className={tool === "ground" ? "active" : ""}
-          onClick={() => setTool("ground")}
+          className={tool === "dirt" ? "active" : ""}
+          onClick={() => setTool("dirt")}
         >
-          Ground
+          Dirt
+        </button>
+        <button
+          className={tool === "grass" ? "active" : ""}
+          onClick={() => setTool("grass")}
+        >
+          Grass
         </button>
         <button
           className={tool === "grill" ? "active" : ""}
@@ -292,6 +409,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
             down
           </button>
         </div>
+        <div>{layersControls}</div>
       </div>
       <div className="tilegrid">
         {tiles.map((row, y) => {
