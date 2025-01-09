@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 #[cfg(test)]
 mod test;
 
-use bevy_math::IVec2;
+use bevy_math::IVec3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TileType {
@@ -23,15 +23,15 @@ enum TileType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelDescription {
-    start_pos: IVec2,
-    start_dir: IVec2,
-    ground: HashSet<IVec2>,
-    grills: HashSet<IVec2>,
+    start_pos: IVec3,
+    start_dir: IVec3,
+    ground: HashSet<IVec3>,
+    grills: HashSet<IVec3>,
     sausages: Vec<Sausage>,
 }
 
 impl LevelDescription {
-    fn get_tile_type(&self, tile: IVec2) -> TileType {
+    fn get_tile_type(&self, tile: IVec3) -> TileType {
         if self.ground.contains(&tile) {
             return TileType::Ground;
         }
@@ -44,8 +44,8 @@ impl LevelDescription {
 
 #[derive(Debug, Clone)]
 pub struct LevelState<'a> {
-    player_pos: IVec2,
-    player_dir: IVec2,
+    player_pos: IVec3,
+    player_dir: IVec3,
     sausages: Vec<Sausage>,
     neighbors: OnceCell<NodeNeighbors<'a>>,
     description: &'a LevelDescription,
@@ -130,16 +130,16 @@ impl PartialEq for LevelState<'_> {
 }
 impl Eq for LevelState<'_> {}
 impl<'a> LevelState<'a> {
-    fn get_sausage(&self, pos: IVec2) -> Option<&Sausage> {
+    fn get_sausage(&self, pos: IVec3) -> Option<&Sausage> {
         self.sausages
             .iter()
-            .find(|s| s.pos == pos || s.pos + IVec2::from(s.orientation) == pos)
+            .find(|s| s.pos == pos || s.pos + IVec3::from(s.orientation) == pos)
     }
 
-    fn get_sausage_mut(&mut self, pos: IVec2) -> Option<&mut Sausage> {
+    fn get_sausage_mut(&mut self, pos: IVec3) -> Option<&mut Sausage> {
         self.sausages
             .iter_mut()
-            .find(|s| s.pos == pos || s.pos + IVec2::from(s.orientation) == pos)
+            .find(|s| s.pos == pos || s.pos + IVec3::from(s.orientation) == pos)
     }
 
     fn get_status(&self) -> LevelStatus {
@@ -149,8 +149,8 @@ impl<'a> LevelState<'a> {
         for sausage in &self.sausages {
             let sausage_pos_1 = sausage.pos;
             let sausage_pos_2 = match sausage.orientation {
-                SausageOrientation::Horizontal => sausage_pos_1 + IVec2::X,
-                SausageOrientation::Vertical => sausage_pos_1 + IVec2::Y,
+                SausageOrientation::Horizontal => sausage_pos_1 + IVec3::X,
+                SausageOrientation::Vertical => sausage_pos_1 + IVec3::Y,
             };
             if !(ground.contains(&sausage_pos_1)
                 || ground.contains(&sausage_pos_2)
@@ -182,12 +182,12 @@ impl<'a> LevelState<'a> {
         LevelStatus::Unsolved
     }
 
-    fn push_sausages(&mut self, pos: IVec2, dir: IVec2) {
+    fn push_sausages(&mut self, pos: IVec3, dir: IVec3) {
         let (i, sausage_to_push) = match self
             .sausages
             .iter_mut()
             .enumerate()
-            .find(|(i, s)| s.pos == pos || s.pos + IVec2::from(s.orientation) == pos)
+            .find(|(i, s)| s.pos == pos || s.pos + IVec3::from(s.orientation) == pos)
         {
             Some(s) => s,
             None => return,
@@ -199,14 +199,14 @@ impl<'a> LevelState<'a> {
                 (sausage_to_push.cooked[1], sausage_to_push.cooked[0]);
             let tiles_to_clear = [
                 sausage_to_push.pos + dir,
-                sausage_to_push.pos + IVec2::from(sausage_to_push.orientation) + dir,
+                sausage_to_push.pos + IVec3::from(sausage_to_push.orientation) + dir,
             ];
             self.push_sausages(tiles_to_clear[0], dir);
             self.push_sausages(tiles_to_clear[1], dir);
         } else {
             //sliding
             let sausage_pos = sausage_to_push.pos;
-            if dir == IVec2::from(sausage_to_push.orientation) {
+            if dir == IVec3::from(sausage_to_push.orientation) {
                 self.push_sausages(sausage_pos + (dir * 2), dir)
             } else {
                 self.push_sausages(sausage_pos + dir, dir);
@@ -219,20 +219,20 @@ impl<'a> LevelState<'a> {
         if self
             .description
             .grills
-            .contains(&(self.sausages[i].pos + IVec2::from(self.sausages[i].orientation)))
+            .contains(&(self.sausages[i].pos + IVec3::from(self.sausages[i].orientation)))
         {
             self.sausages[i].cooked[0][1] += 1
         }
     }
 
-    fn get_next_state(&self, description: &'a LevelDescription, input: IVec2) -> LevelState<'a> {
+    fn get_next_state(&self, description: &'a LevelDescription, input: IVec3) -> LevelState<'a> {
         let mut state = self.clone();
 
         match input {
-            IVec2 { x: 1, y: 0 } => (),
-            IVec2 { x: 0, y: 1 } => (),
-            IVec2 { x: -1, y: 0 } => (),
-            IVec2 { x: 0, y: -1 } => (),
+            IVec3 { x: 1, y: 0, z: 0 } => (),
+            IVec3 { x: 0, y: 1, z: 0 } => (),
+            IVec3 { x: -1, y: 0, z: 0 } => (),
+            IVec3 { x: 0, y: -1, z: 0 } => (),
             _ => panic!("get_next_state was supplied a vector that was not a basis vector"),
         };
 
@@ -248,8 +248,8 @@ impl<'a> LevelState<'a> {
             state.push_sausages(state.player_pos - state.player_dir, -state.player_dir);
             state.player_pos -= state.player_dir;
         }
-        if self.player_dir.perp() == input {
-            let fork_to_occupy = self.player_dir.perp();
+        if self.player_dir.cross(IVec3::Z) == input {
+            let fork_to_occupy = self.player_dir.cross(IVec3::Z);
             state.push_sausages(
                 state.player_pos + state.player_dir + fork_to_occupy,
                 fork_to_occupy,
@@ -257,8 +257,8 @@ impl<'a> LevelState<'a> {
             state.push_sausages(state.player_pos + fork_to_occupy, -state.player_dir);
             state.player_dir = fork_to_occupy;
         }
-        if -self.player_dir.perp() == input {
-            let fork_to_occupy = -self.player_dir.perp();
+        if -self.player_dir.cross(IVec3::Z) == input {
+            let fork_to_occupy = -self.player_dir.cross(IVec3::Z);
             state.push_sausages(
                 state.player_pos + state.player_dir + fork_to_occupy,
                 fork_to_occupy,
@@ -351,27 +351,27 @@ pub enum SausageOrientation {
     Horizontal,
     Vertical,
 }
-impl From<SausageOrientation> for IVec2 {
+impl From<SausageOrientation> for IVec3 {
     fn from(value: SausageOrientation) -> Self {
         match value {
-            SausageOrientation::Horizontal => IVec2::X,
-            SausageOrientation::Vertical => IVec2::Y,
+            SausageOrientation::Horizontal => IVec3::X,
+            SausageOrientation::Vertical => IVec3::Y,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Sausage {
-    pos: IVec2,
+    pos: IVec3,
     // zero is the side that is down
     cooked: [[u8; 2]; 2],
     pub orientation: SausageOrientation,
 }
 
 impl Sausage {
-    pub fn check_collision(&self, x: i32, y: i32) -> bool {
-        let check_pos = IVec2::new(x, y);
-        check_pos == self.pos || check_pos == self.pos + IVec2::from(self.orientation)
+    pub fn check_collision(&self, x: i32, y: i32, z: i32) -> bool {
+        let check_pos = IVec3::new(x, y, z);
+        check_pos == self.pos || check_pos == self.pos + IVec3::from(self.orientation)
     }
 
     pub fn pos(&self) -> Vec<i32> {
@@ -447,7 +447,8 @@ pub fn generate_graph<'a>(level_description: &'a LevelDescription) -> LevelGraph
         };
         let right: Weak<LevelState> = {
             let new_state = Rc::new(
-                current_state.get_next_state(level_description, current_state.player_dir.perp()),
+                current_state
+                    .get_next_state(level_description, current_state.player_dir.cross(IVec3::Z)),
             );
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
@@ -455,7 +456,8 @@ pub fn generate_graph<'a>(level_description: &'a LevelDescription) -> LevelGraph
         };
         let left: Weak<LevelState> = {
             let new_state = Rc::new(
-                current_state.get_next_state(level_description, -current_state.player_dir.perp()),
+                current_state
+                    .get_next_state(level_description, -current_state.player_dir.cross(IVec3::Z)),
             );
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());

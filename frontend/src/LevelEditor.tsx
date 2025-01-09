@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { IVec2, LevelDescription, LevelGraph, Sausage } from "./types";
+import { IVec2, IVec3, LevelDescription, LevelGraph, Sausage } from "./types";
 import SolutionWorker from "./worker?worker";
 import { produce } from "immer";
 interface Args {
   setSolution: (solution: LevelGraph) => void;
-  width: number;
-  height: number;
+  lenX: number;
+  lenY: number;
+  lenZ: number;
 }
 
 type Tool = "water" | "ground" | "grill";
 
-function LevelEditor({ setSolution, height, width }: Args) {
+function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   const worker = useRef(new SolutionWorker());
 
   const [groundTiles, setGroundTiles] = useState<Set<string>>(new Set());
@@ -22,109 +23,128 @@ function LevelEditor({ setSolution, height, width }: Args) {
   const [playerDir, setPlayerDir] = useState<"up" | "right" | "down" | "left">(
     "up",
   );
-  const [playerPos, setPlayerPos] = useState<IVec2 | null>(null);
+  const [playerPos, setPlayerPos] = useState<IVec3 | null>(null);
   const [waiting, setWaiting] = useState<boolean>(false);
 
   const tiles = [];
-  for (let y = 0; y < height; y++) {
-    const row = [];
-    for (let x = 0; x < width; x++) {
-      let tileType = "water";
-      if (groundTiles.has(JSON.stringify([x, y]))) tileType = "ground";
-      if (grillTiles.has(JSON.stringify([x, y]))) tileType = "grill";
-      row.push(
-        <div
-          key={x}
-          className={`tile ${tileType} `}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "copy";
-          }}
-          onDrop={(e) => {
-            let data = e.dataTransfer.getData("internal");
-            if (data.length > 0) {
-              switch (data) {
-                case "horizontal":
-                  setSausages([
-                    ...sausages,
-                    {
-                      pos: [x, y],
-                      cooked: [
-                        [0, 0],
-                        [0, 0],
-                      ],
-                      orientation: "Horizontal",
-                    },
-                  ]);
-                  break;
-                case "vertical":
-                  setSausages([
-                    ...sausages,
-                    {
-                      pos: [x, y],
-                      cooked: [
-                        [0, 0],
-                        [0, 0],
-                      ],
-                      orientation: "Vertical",
-                    },
-                  ]);
-                  break;
-                case "player":
-                  setPlayerPos([x, y]);
-                  break;
+
+  for (let z = 0; z < lenZ; z++) {
+    for (let y = 0; y < lenY; y++) {
+      const row = [];
+      for (let x = 0; x < lenX; x++) {
+        let tileType = "water";
+        if (groundTiles.has(JSON.stringify([x, y, z]))) tileType = "ground";
+        if (grillTiles.has(JSON.stringify([x, y, z]))) tileType = "grill";
+        row.push(
+          <div
+            key={x}
+            className={`tile ${tileType} `}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(e) => {
+              let data = e.dataTransfer.getData("internal");
+              if (data.length > 0) {
+                switch (data) {
+                  case "horizontal":
+                    setSausages([
+                      ...sausages,
+                      {
+                        pos: [x, y, z],
+                        cooked: [
+                          [0, 0],
+                          [0, 0],
+                        ],
+                        orientation: "Horizontal",
+                      },
+                    ]);
+                    break;
+                  case "vertical":
+                    setSausages([
+                      ...sausages,
+                      {
+                        pos: [x, y, z],
+                        cooked: [
+                          [0, 0],
+                          [0, 0],
+                        ],
+                        orientation: "Vertical",
+                      },
+                    ]);
+                    break;
+                  case "player":
+                    setPlayerPos([x, y, z]);
+                    break;
+                }
               }
-            }
-          }}
-          onClick={() => {
-            if (tool === "water") {
-              setGrillTiles(
-                produce(grillTiles, (s) => {
-                  s.delete(JSON.stringify([x, y]));
-                }),
-              );
-              setGroundTiles(
-                produce(groundTiles, (s) => {
-                  s.delete(JSON.stringify([x, y]));
-                }),
-              );
-            }
-            if (tool === "ground") {
-              setGrillTiles(
-                produce(grillTiles, (s) => {
-                  s.delete(JSON.stringify([x, y]));
-                }),
-              );
-              setGroundTiles(
-                produce(groundTiles, (s) => {
-                  s.add(JSON.stringify([x, y]));
-                }),
-              );
-            }
-            if (tool === "grill") {
-              setGrillTiles(
-                produce(grillTiles, (s) => {
-                  s.add(JSON.stringify([x, y]));
-                }),
-              );
-              setGroundTiles(
-                produce(groundTiles, (s) => {
-                  s.delete(JSON.stringify([x, y]));
-                }),
-              );
-            }
-          }}
-        >
-          {sausages.map((s) => {
-            if (s.pos[0] === x && s.pos[1] === y) {
-              return s.orientation === "Vertical" ? "V" : "H";
-            }
-          })}
-          {playerPos?.[0] === x && playerPos[1] === y ? "P" : ""}
-        </div>,
-      );
+            }}
+            onClick={() => {
+              if (tool === "water") {
+                setGrillTiles(
+                  produce(grillTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, z]));
+                  }),
+                );
+                setGroundTiles(
+                  produce(groundTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, z]));
+                  }),
+                );
+              }
+              if (tool === "ground") {
+                setGrillTiles(
+                  produce(grillTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, z]));
+                  }),
+                );
+                setGroundTiles(
+                  produce(groundTiles, (s) => {
+                    s.add(JSON.stringify([x, y, z]));
+                  }),
+                );
+              }
+              if (tool === "grill") {
+                setGrillTiles(
+                  produce(grillTiles, (s) => {
+                    s.add(JSON.stringify([x, y, z]));
+                  }),
+                );
+                setGroundTiles(
+                  produce(groundTiles, (s) => {
+                    s.delete(JSON.stringify([x, y, z]));
+                  }),
+                );
+              }
+            }}
+          >
+            {sausages.map((s) => {
+              if (s.pos[0] === x && s.pos[1] === y && s.pos[2] === z) {
+                return s.orientation === "Vertical" ? "V" : "H";
+              }
+              if (
+                s.pos[0] === x + 1 &&
+                s.pos[1] === y &&
+                s.pos[2] === z &&
+                s.orientation === "Horizontal"
+              ) {
+                return "H";
+              }
+              if (
+                s.pos[0] === x &&
+                s.pos[1] === y + 1 &&
+                s.pos[2] === z &&
+                s.orientation === "Vertical"
+              ) {
+                return "V";
+              }
+            })}
+            {playerPos?.[0] === x && playerPos[1] === y ? "P" : ""}
+          </div>,
+        );
+      }
+      tiles.push(row);
     }
-    tiles.push(row);
   }
 
   useEffect(() => {
@@ -136,27 +156,27 @@ function LevelEditor({ setSolution, height, width }: Args) {
   }, [worker]);
 
   const levelDescription = (() => {
-    let playerDirVector = [1, 0];
+    let playerDirVector = [1, 0, 0];
     switch (playerDir) {
       case "up":
-        playerDirVector = [0, -1];
+        playerDirVector = [0, -1, 0];
         break;
       case "right":
-        playerDirVector = [1, 0];
+        playerDirVector = [1, 0, 0];
         break;
       case "down":
-        playerDirVector = [0, 1];
+        playerDirVector = [0, 1, 0];
         break;
       case "left":
-        playerDirVector = [-1, 0];
+        playerDirVector = [-1, 0, 0];
         break;
     }
 
-    let ground: IVec2[] = [...groundTiles].map((t) => {
-      return JSON.parse(t) as IVec2;
+    let ground: IVec3[] = [...groundTiles].map((t) => {
+      return JSON.parse(t) as IVec3;
     });
-    let grills: IVec2[] = [...grillTiles].map((t) => {
-      return JSON.parse(t) as IVec2;
+    let grills: IVec3[] = [...grillTiles].map((t) => {
+      return JSON.parse(t) as IVec3;
     });
 
     return {
@@ -176,10 +196,14 @@ function LevelEditor({ setSolution, height, width }: Args) {
           const data = JSON.parse(
             e.get("data")?.toString() ?? "{}",
           ) as LevelDescription;
-          if (JSON.stringify(data.start_dir) === "[1,0]") setPlayerDir("right");
-          if (JSON.stringify(data.start_dir) === "[-1,0]") setPlayerDir("left");
-          if (JSON.stringify(data.start_dir) === "[0,1]") setPlayerDir("down");
-          if (JSON.stringify(data.start_dir) === "[0,-1]") setPlayerDir("up");
+          if (JSON.stringify(data.start_dir) === "[1,0,0]")
+            setPlayerDir("right");
+          if (JSON.stringify(data.start_dir) === "[-1,0,0]")
+            setPlayerDir("left");
+          if (JSON.stringify(data.start_dir) === "[0,1,0]")
+            setPlayerDir("down");
+          if (JSON.stringify(data.start_dir) === "[0,-1,0]") setPlayerDir("up");
+
           setPlayerPos(data.start_pos);
           setSausages(data.sausages);
           setGroundTiles(new Set(data.ground.map((t) => JSON.stringify(t))));
