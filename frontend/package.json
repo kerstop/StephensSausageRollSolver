@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/three": "^0.172.0",
     "cytoscape": "^3.30.4",
     "immer": "^10.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "solver": "../pkg/"
+    "solver": "../pkg/",
+    "three": "^0.172.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
