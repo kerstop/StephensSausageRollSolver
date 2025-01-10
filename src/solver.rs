@@ -129,7 +129,7 @@ impl PartialEq for LevelState {
     }
 }
 impl Eq for LevelState {}
-impl<'a> LevelState {
+impl LevelState {
     fn get_sausage(&self, pos: IVec3) -> Option<&Sausage> {
         self.sausages
             .iter()
@@ -225,7 +225,7 @@ impl<'a> LevelState {
         }
     }
 
-    fn get_next_state(&self, description: &'a LevelDescription, input: IVec3) -> LevelState {
+    fn get_next_state(&self, input: IVec3) -> LevelState {
         let mut state = self.clone();
 
         match input {
@@ -237,13 +237,16 @@ impl<'a> LevelState {
         };
 
         if self.player_dir == input
-            && description.get_tile_type(self.player_pos + input) != TileType::Water
+            && self.description.get_tile_type(self.player_pos + input) != TileType::Water
         {
             state.push_sausages(state.player_pos + (state.player_dir * 2), state.player_dir);
             state.player_pos += state.player_dir;
         }
         if -self.player_dir == input
-            && description.get_tile_type(self.player_pos - self.player_dir) != TileType::Water
+            && self
+                .description
+                .get_tile_type(self.player_pos - self.player_dir)
+                != TileType::Water
         {
             state.push_sausages(state.player_pos - state.player_dir, -state.player_dir);
             state.player_pos -= state.player_dir;
@@ -267,7 +270,7 @@ impl<'a> LevelState {
             state.player_dir = fork_to_occupy;
         }
 
-        if description.grills.contains(&state.player_pos) {
+        if self.description.grills.contains(&state.player_pos) {
             state.player_pos -= input
         }
 
@@ -432,33 +435,27 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
         }
 
         let forward: Weak<LevelState> = {
-            let new_state =
-                Rc::new(current_state.get_next_state(level_description, current_state.player_dir));
+            let new_state = Rc::new(current_state.get_next_state(current_state.player_dir));
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
             Rc::downgrade(saved_state)
         };
         let back: Weak<LevelState> = {
-            let new_state =
-                Rc::new(current_state.get_next_state(level_description, -current_state.player_dir));
+            let new_state = Rc::new(current_state.get_next_state(-current_state.player_dir));
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
             Rc::downgrade(saved_state)
         };
         let right: Weak<LevelState> = {
-            let new_state = Rc::new(
-                current_state
-                    .get_next_state(level_description, current_state.player_dir.cross(IVec3::Z)),
-            );
+            let new_state =
+                Rc::new(current_state.get_next_state(current_state.player_dir.cross(IVec3::Z)));
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
             Rc::downgrade(saved_state)
         };
         let left: Weak<LevelState> = {
-            let new_state = Rc::new(
-                current_state
-                    .get_next_state(level_description, -current_state.player_dir.cross(IVec3::Z)),
-            );
+            let new_state =
+                Rc::new(current_state.get_next_state(-current_state.player_dir.cross(IVec3::Z)));
             let saved_state = states.get_or_insert(new_state);
             exploration_queue.push_back(saved_state.clone());
             Rc::downgrade(saved_state)

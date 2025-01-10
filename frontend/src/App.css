@@ -10,7 +10,7 @@ label {
     margin-inline: 0.5em;
   }
   input[type="number"] {
-    width: 8ch;
+    width: 5ch;
   }
 }
 

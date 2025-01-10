@@ -174,12 +174,9 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
               if (sausageToRemove !== null) {
                 setSausages(
                   produce(sausages, (sausages) => {
-                    sausages.filter(
-                      (s) =>
-                        JSON.stringify(s.pos) !==
-                        JSON.stringify(sausageToRemove.pos),
+                    return sausages.filter(
+                      (s) => !compareIVec3(s.pos, sausageToRemove.pos),
                     );
-                    return sausages;
                   }),
                 );
               } else if (
@@ -261,6 +258,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   for (let i = 0; i < lenZ; i++) {
     layersControls.push(
       <button
+        key={i}
         className={`layer-control ${viewedLayer === i ? "active" : null}`}
         onClick={() => {
           setViewedLayer(i);
@@ -280,7 +278,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   }, [worker]);
 
   const levelDescription = (() => {
-    let playerDirVector = JSON.stringify(playerDir);
+    let playerDirVector = playerDir;
 
     let ground: IVec3[] = [...groundTiles].map((t) => {
       return JSON.parse(t) as IVec3;
@@ -329,7 +327,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
           className={tool === "remove" ? "active" : ""}
           onClick={() => setTool("remove")}
         >
-          Water
+          Remove
         </button>
         <button
           className={tool === "dirt" ? "active" : ""}
