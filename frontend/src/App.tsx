@@ -13,7 +13,14 @@ function App() {
     <>
       <MyGraph />
       <LevelEditor setSolution={setSolution} width={10} height={10} />
-      {solution !== null ? <Graph level={solution} /> : ""}
+      {solution !== null ? (
+        <>
+          <MyGraph solution={solution} />
+          <Graph level={solution} />
+        </>
+      ) : (
+        ""
+      )}
     </>
   );
 }
