@@ -15,7 +15,8 @@ export interface FrameEvent {
 
 interface Node {
   position: Vector3;
-  delta: Vector3;
+  velocity: Vector3;
+  force: Vector3;
   neighbors: Node[];
   pinned: boolean;
 }
@@ -26,9 +27,11 @@ let edges: [number, number][] = [];
 let paused: boolean = false;
 let initialized: boolean = false;
 
+let max_speed: number = 100;
 let optimal_length: number = 10;
-let spring_stiffness: number = 0.2;
-let centralizing_force_modifier: number = 0.7;
+let damping: number = 0.01;
+let spring_stiffness: number = 0.1;
+let dispersion_force_multiplier: number = 1;
 
 self.onmessage = (e: MessageEvent<Message>) => {
   let message = e.data;
@@ -39,7 +42,8 @@ self.onmessage = (e: MessageEvent<Message>) => {
       position.add(new Vector3(-0.5, -0.5, -0.5));
       nodes.set(state.id, {
         position,
-        delta: new Vector3(0, 0, 0),
+        velocity: new Vector3(),
+        force: new Vector3(0, 0, 0),
         neighbors: [],
         pinned: false,
       });
@@ -47,7 +51,8 @@ self.onmessage = (e: MessageEvent<Message>) => {
 
     nodes.set(message.graph.initial_state.id, {
       position: new Vector3(0, 0, 0),
-      delta: new Vector3(0, 0, 0),
+      velocity: new Vector3(0, 0, 0),
+      force: new Vector3(0, 0, 0),
       neighbors: [],
       pinned: true,
     });
@@ -116,12 +121,12 @@ const getNextFrame = () => {
     d.setLength(optimal_length - d.length());
     d.multiplyScalar(spring_stiffness);
     if (n1.pinned) {
-      n2.delta.add(d);
+      n2.force.add(d);
     } else {
       d.multiplyScalar(0.5);
-      n2.delta.add(d);
+      n2.force.add(d);
       d.multiplyScalar(-1);
-      n1.delta.add(d);
+      n1.force.add(d);
     }
   });
 
@@ -132,20 +137,39 @@ const getNextFrame = () => {
         average_neighbors_position.add(neighbor.position);
       });
 
-      average_neighbors_position.divideScalar(node.neighbors.length);
-      let centralizing_force = average_neighbors_position.sub(node.position);
-      centralizing_force.multiplyScalar(centralizing_force_modifier);
-      node.delta.add(centralizing_force);
+      if (!node.pinned) {
+        let force_vector = new Vector3();
+        for (const node2 of nodes.values()) {
+          if (node === node2) continue;
+          force_vector.subVectors(node.position, node2.position);
+          let distance_sqr = force_vector.lengthSq();
+
+          node.force.add(
+            force_vector
+              .normalize()
+              .multiplyScalar(dispersion_force_multiplier * (1 / distance_sqr)),
+          );
+        }
+      }
     }
   }
 
   let total = 0;
+
   for (const node of nodes.values()) {
-    total += node.delta.length();
-    node.position.add(node.delta);
-    node.delta.set(0, 0, 0);
+    total += node.force.length();
+    node.velocity.add(node.force);
+    node.velocity.multiplyScalar(1 - damping).clampLength(0, max_speed);
+    node.position.add(node.velocity);
+    node.force.set(0, 0, 0);
   }
-  console.log(`total movement ${total}`);
+
+  console.log(
+    `
+total movement ${total}
+average movement ${total / nodes.size}
+`.trim(),
+  );
 
   let message: FrameEvent[] = [];
   for (const [id, node] of nodes.entries()) {
