@@ -147,16 +147,7 @@ impl LevelState {
         let grills = &self.description.grills;
         // no sausages Lost
         for sausage in &self.sausages {
-            let sausage_pos_1 = sausage.pos;
-            let sausage_pos_2 = match sausage.orientation {
-                SausageOrientation::Horizontal => sausage_pos_1 + IVec3::X,
-                SausageOrientation::Vertical => sausage_pos_1 + IVec3::Y,
-            };
-            if !(ground.contains(&sausage_pos_1)
-                || ground.contains(&sausage_pos_2)
-                || grills.contains(&sausage_pos_1)
-                || grills.contains(&sausage_pos_2))
-            {
+            if sausage.pos.z < 1 {
                 return LevelStatus::Lost;
             }
         }
@@ -182,7 +173,39 @@ impl LevelState {
         LevelStatus::Unsolved
     }
 
-    fn push_sausages(&mut self, pos: IVec3, dir: IVec3) {
+    fn can_push(&self, pos: IVec3, dir: IVec3) -> bool {
+        if self.description.ground.contains(&pos) || self.description.grills.contains(&pos) {
+            return false;
+        }
+        let (i, sausage_to_push) = match self
+            .sausages
+            .iter()
+            .enumerate()
+            .find(|(i, s)| s.pos == pos || s.pos + IVec3::from(s.orientation) == pos)
+        {
+            Some(s) => s,
+            None => return true,
+        };
+
+        if dir.dot(sausage_to_push.orientation.into()) == 0 {
+            //rolling
+            let tiles_to_clear = [
+                sausage_to_push.pos + dir,
+                sausage_to_push.pos + IVec3::from(sausage_to_push.orientation) + dir,
+            ];
+            self.can_push(tiles_to_clear[0], dir) && self.can_push(tiles_to_clear[1], dir)
+        } else {
+            //sliding
+            let sausage_pos = sausage_to_push.pos;
+            if dir == IVec3::from(sausage_to_push.orientation) {
+                self.can_push(sausage_pos + (dir * 2), dir)
+            } else {
+                self.can_push(sausage_pos + dir, dir)
+            }
+        }
+    }
+
+    fn push(&mut self, pos: IVec3, dir: IVec3) {
         let (i, sausage_to_push) = match self
             .sausages
             .iter_mut()
@@ -195,32 +218,32 @@ impl LevelState {
 
         if dir.dot(sausage_to_push.orientation.into()) == 0 {
             //rolling
-            (sausage_to_push.cooked[0], sausage_to_push.cooked[1]) =
-                (sausage_to_push.cooked[1], sausage_to_push.cooked[0]);
             let tiles_to_clear = [
                 sausage_to_push.pos + dir,
                 sausage_to_push.pos + IVec3::from(sausage_to_push.orientation) + dir,
             ];
-            self.push_sausages(tiles_to_clear[0], dir);
-            self.push_sausages(tiles_to_clear[1], dir);
+            (sausage_to_push.cooked[0], sausage_to_push.cooked[1]) =
+                (sausage_to_push.cooked[1], sausage_to_push.cooked[0]);
         } else {
             //sliding
             let sausage_pos = sausage_to_push.pos;
             if dir == IVec3::from(sausage_to_push.orientation) {
-                self.push_sausages(sausage_pos + (dir * 2), dir)
+                self.push(sausage_pos + (dir * 2), dir);
             } else {
-                self.push_sausages(sausage_pos + dir, dir);
-            }
+                self.push(sausage_pos + dir, dir);
+            };
         }
         self.sausages[i].pos += dir;
-        if self.description.grills.contains(&self.sausages[i].pos) {
-            self.sausages[i].cooked[0][0] += 1
-        }
         if self
             .description
             .grills
-            .contains(&(self.sausages[i].pos + IVec3::from(self.sausages[i].orientation)))
+            .contains(&(self.sausages[i].pos + IVec3::NEG_Z))
         {
+            self.sausages[i].cooked[0][0] += 1
+        }
+        if self.description.grills.contains(
+            &(self.sausages[i].pos + IVec3::from(self.sausages[i].orientation) + IVec3::NEG_Z),
+        ) {
             self.sausages[i].cooked[0][1] += 1
         }
     }
@@ -237,41 +260,82 @@ impl LevelState {
         };
 
         if self.player_dir == input
-            && self.description.get_tile_type(self.player_pos + input) != TileType::Water
+            && self
+                .description
+                .get_tile_type(self.player_pos + input + IVec3::NEG_Z)
+                == TileType::Ground
         {
-            state.push_sausages(state.player_pos + (state.player_dir * 2), state.player_dir);
+            if state.can_push(state.player_pos + (state.player_dir * 2), state.player_dir) {
+                state.push(state.player_pos + (state.player_dir * 2), state.player_dir);
+            }
             state.player_pos += state.player_dir;
         }
         if -self.player_dir == input
             && self
                 .description
-                .get_tile_type(self.player_pos - self.player_dir)
-                != TileType::Water
+                .get_tile_type(self.player_pos - self.player_dir + IVec3::NEG_Z)
+                == TileType::Ground
+            && state.can_push(state.player_pos - state.player_dir, -state.player_dir)
         {
-            state.push_sausages(state.player_pos - state.player_dir, -state.player_dir);
+            state.push(state.player_pos - state.player_dir, -state.player_dir);
             state.player_pos -= state.player_dir;
         }
         if self.player_dir.cross(IVec3::Z) == input {
-            let fork_to_occupy = self.player_dir.cross(IVec3::Z);
-            state.push_sausages(
-                state.player_pos + state.player_dir + fork_to_occupy,
-                fork_to_occupy,
-            );
-            state.push_sausages(state.player_pos + fork_to_occupy, -state.player_dir);
-            state.player_dir = fork_to_occupy;
+            let left = self.player_dir.cross(IVec3::Z);
+            if state.can_push(state.player_pos + state.player_dir + left, left) {
+                state.push(state.player_pos + state.player_dir + left, left);
+
+                if state.can_push(state.player_pos + left, -state.player_dir) {
+                    state.push(state.player_pos + left, -state.player_dir);
+                    state.player_dir = left;
+                }
+            }
         }
         if -self.player_dir.cross(IVec3::Z) == input {
-            let fork_to_occupy = -self.player_dir.cross(IVec3::Z);
-            state.push_sausages(
-                state.player_pos + state.player_dir + fork_to_occupy,
-                fork_to_occupy,
-            );
-            state.push_sausages(state.player_pos + fork_to_occupy, -state.player_dir);
-            state.player_dir = fork_to_occupy;
+            let right = -self.player_dir.cross(IVec3::Z);
+            if state.can_push(state.player_pos + state.player_dir + right, right) {
+                state.push(state.player_pos + state.player_dir + right, right);
+
+                if state.can_push(state.player_pos + right, -state.player_dir) {
+                    state.push(state.player_pos + right, -state.player_dir);
+                    state.player_dir = right;
+                }
+            }
         }
 
-        if self.description.grills.contains(&state.player_pos) {
+        if self
+            .description
+            .grills
+            .contains(&(state.player_pos + IVec3::NEG_Z))
+        {
             state.player_pos -= input
+        }
+
+        for i in 0..state.sausages.len() {
+            let sausage = state.sausages.get(i).unwrap();
+            dbg!(sausage);
+            if !(state
+                .description
+                .ground
+                .contains(&(sausage.pos + IVec3::NEG_Z))
+                || state
+                    .description
+                    .grills
+                    .contains(&(sausage.pos + IVec3::NEG_Z))
+                || state.get_sausage(sausage.pos + IVec3::NEG_Z).is_some()
+                || state
+                    .description
+                    .ground
+                    .contains(&(sausage.pos2() + IVec3::NEG_Z))
+                || state
+                    .description
+                    .grills
+                    .contains(&(sausage.pos2() + IVec3::NEG_Z))
+                || state.get_sausage(sausage.pos2() + IVec3::NEG_Z).is_some())
+            {
+                let mut sausage = state.sausages.get_mut(i).unwrap();
+                sausage.pos += IVec3::NEG_Z;
+            }
         }
 
         state
@@ -388,6 +452,10 @@ impl Sausage {
             self.cooked[1][0],
             self.cooked[1][1],
         ]
+    }
+
+    fn pos2(&self) -> IVec3 {
+        IVec3::from(self.orientation) + self.pos
     }
 }
 

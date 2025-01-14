@@ -1,6 +1,12 @@
 export type IVec3 = [number, number, number];
-export function compareIVec3(v1: IVec3, v2: IVec3): boolean {
-  return v1[0] === v2[0] && v1[1] === v2[1] && v1[2] === v2[2];
+export namespace IVec3 {
+  export function compare(v1: IVec3, v2: IVec3): boolean {
+    return v1[0] === v2[0] && v1[1] === v2[1] && v1[2] === v2[2];
+  }
+
+  export function add(v1: IVec3, v2: IVec3): IVec3 {
+    return [v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]];
+  }
 }
 
 export interface Sausage {
@@ -28,6 +34,31 @@ export interface LevelState {
   status: "Lost" | "Unsolved" | "Solved" | "Burnt";
 }
 
+export namespace LevelState {
+  export function getSausageAt(des: LevelDescription, pos: IVec3) {
+    return (
+      des.sausages.find((s) => {
+        if (IVec3.compare(s.pos, pos)) {
+          return true;
+        }
+        if (
+          IVec3.compare(s.pos, IVec3.add(pos, [-1, 0, 0])) &&
+          s.orientation === "Horizontal"
+        ) {
+          return true;
+        }
+        if (
+          IVec3.compare(s.pos, IVec3.add(pos, [0, -1, 0])) &&
+          s.orientation === "Vertical"
+        ) {
+          return true;
+        }
+        return false;
+      }) ?? null
+    );
+  }
+}
+
 export interface Edge {
   id: number;
   source: number;
@@ -48,4 +79,29 @@ export interface LevelDescription {
   ground: IVec3[];
   grills: IVec3[];
   sausages: Sausage[];
+}
+
+export namespace LevelDescription {
+  export function getSausageAt(des: LevelDescription, pos: IVec3) {
+    return (
+      des.sausages.find((s) => {
+        if (IVec3.compare(s.pos, pos)) {
+          return true;
+        }
+        if (
+          IVec3.compare(s.pos, IVec3.add(pos, [-1, 0, 0])) &&
+          s.orientation === "Horizontal"
+        ) {
+          return true;
+        }
+        if (
+          IVec3.compare(s.pos, IVec3.add(pos, [0, -1, 0])) &&
+          s.orientation === "Vertical"
+        ) {
+          return true;
+        }
+        return false;
+      }) ?? null
+    );
+  }
 }
