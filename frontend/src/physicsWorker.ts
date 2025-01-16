@@ -26,12 +26,14 @@ let nodes: Map<number, Node> = new Map();
 let edges: [number, number][] = [];
 let paused: boolean = false;
 let initialized: boolean = false;
+let _prevTime: DOMHighResTimeStamp = performance.now();
 
 let max_speed: number = 100;
-let optimal_length: number = 10;
+let optimalLength: number = 10;
 let damping: number = 0.01;
-let spring_stiffness: number = 0.1;
-let dispersion_force_multiplier: number = 1;
+let springStiffness: number = 0.1;
+let dispersionForceMultiplier: number = 1;
+let dispersionForceFalloff: number = 10;
 
 self.onmessage = (e: MessageEvent<Message>) => {
   let message = e.data;
@@ -107,6 +109,66 @@ self.onmessage = (e: MessageEvent<Message>) => {
 };
 
 const getNextFrame = () => {
+  performance.mark("PhysicsStart");
+  let positionIndex = new Map<string, Node[]>();
+  for (let node of nodes.values()) {
+    let indexValue = JSON.stringify(
+      node.position
+        .clone()
+        .multiplyScalar(1 / (dispersionForceFalloff * 2))
+        .floor(),
+    );
+    let indexVoxel = positionIndex.get(indexValue);
+    if (indexVoxel !== undefined) {
+      indexVoxel.push(node);
+    } else {
+      positionIndex.set(indexValue, [node]);
+    }
+  }
+  let getEffectedNodes = (pos: Vector3) => {
+    let effectedChunksCords = [
+      pos
+        .clone()
+        .multiplyScalar(1 / (dispersionForceFalloff * 2))
+        .round(),
+    ];
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: 0, z: 0 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: 0, y: -1, z: 0 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: 0, y: 0, z: -1 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: -1, z: 0 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: 0, y: -1, z: -1 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: 0, z: -1 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: -1, z: -1 }),
+    );
+
+    let effectedNodes = [];
+    for (let effectedChunkCord of effectedChunksCords) {
+      let effectedChunk =
+        positionIndex.get(JSON.stringify(effectedChunkCord)) ?? [];
+      for (let node of effectedChunk) {
+        if (
+          new Vector3().subVectors(pos, node.position).length() <
+          dispersionForceFalloff
+        )
+          effectedNodes.push(node);
+      }
+    }
+    return effectedNodes;
+  };
+
   edges.forEach((edge) => {
     let n1 = nodes.get(edge[0]);
     let n2 = nodes.get(edge[1]);
@@ -118,8 +180,8 @@ const getNextFrame = () => {
     if (n2.pinned) [n1, n2] = [n2, n1];
 
     let d = new Vector3().subVectors(n2.position, n1.position);
-    d.setLength(optimal_length - d.length());
-    d.multiplyScalar(spring_stiffness);
+    d.setLength(optimalLength - d.length());
+    d.multiplyScalar(springStiffness);
     if (n1.pinned) {
       n2.force.add(d);
     } else {
@@ -139,7 +201,7 @@ const getNextFrame = () => {
 
       if (!node.pinned) {
         let force_vector = new Vector3();
-        for (const node2 of nodes.values()) {
+        for (const node2 of getEffectedNodes(node.position)) {
           if (node === node2) continue;
           force_vector.subVectors(node.position, node2.position);
           let distance_sqr = force_vector.lengthSq();
@@ -147,7 +209,7 @@ const getNextFrame = () => {
           node.force.add(
             force_vector
               .normalize()
-              .multiplyScalar(dispersion_force_multiplier * (1 / distance_sqr)),
+              .multiplyScalar(dispersionForceMultiplier * (1 / distance_sqr)),
           );
         }
       }
@@ -181,4 +243,6 @@ average movement ${total / nodes.size}
   if (!paused) {
     requestAnimationFrame(getNextFrame);
   }
+  performance.mark("PhysicsEnd");
+  performance.measure("PhysicsTime", "PhysicsStart", "PhysicsEnd");
 };
