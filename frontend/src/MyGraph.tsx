@@ -16,16 +16,29 @@ export const MyGraph = ({ solution }: Args) => {
     solution = data as LevelGraph;
   }
 
+  const [pausePhysics, setPausePhysics] = useState(false);
+  const physicsWorker = useRef(new PhysicsWorker());
+  useEffect(() => {
+    physicsWorker.current = new PhysicsWorker();
+    physicsWorker.current.postMessage({
+      graph: solution,
+      pause: false,
+    } as PhysicsWorkerDefs.Message);
+    return () => {
+      physicsWorker.current.terminate();
+    };
+  }, [solution]);
+
   const container = useRef<null | HTMLDivElement>(null);
 
   useEffect(() => {
     const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(400, 300);
+    renderer.setSize(800, 600);
 
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(75, 4 / 3, 0.1, 1000);
-    camera.position.set(10, 10, 20);
+    camera.position.set(10, 10, 20).multiplyScalar(10);
 
     const sunLamp = new THREE.DirectionalLight(0xffffff, 1);
     sunLamp.position.set(1, 1, 1);
@@ -48,12 +61,6 @@ export const MyGraph = ({ solution }: Args) => {
 
     const material = new THREE.MeshStandardMaterial({ color: 0xb8afa2 });
 
-    const physicsWorker = new PhysicsWorker();
-    physicsWorker.postMessage({
-      graph: solution,
-      pause: false,
-    } as PhysicsWorkerDefs.Message);
-
     const meshes = new Map<number, THREE.Mesh>();
     solution.states.forEach((state) => {
       const mesh = new THREE.Mesh(geometry, material);
@@ -62,7 +69,7 @@ export const MyGraph = ({ solution }: Args) => {
       meshes.set(state.id, mesh);
     });
 
-    physicsWorker.onmessage = (e) => {
+    physicsWorker.current.onmessage = (e) => {
       const data = e.data as PhysicsWorkerDefs.FrameEvent[];
       data.forEach(({ id, position }) => {
         let mesh = meshes.get(id);
@@ -82,11 +89,27 @@ export const MyGraph = ({ solution }: Args) => {
 
     container.current?.appendChild(renderer.domElement);
     return () => {
-      physicsWorker.terminate();
       renderer.domElement.remove();
       renderer.dispose();
     };
-  }, []);
+  }, [solution]);
 
-  return <div ref={container}></div>;
+  return (
+    <>
+      <div ref={container}></div>
+      <button
+        type="button"
+        defaultValue={""}
+        className={`${pausePhysics ? "active" : null}`}
+        onClick={() => {
+          physicsWorker.current.postMessage({
+            pause: !pausePhysics,
+          } as PhysicsWorkerDefs.Message);
+          setPausePhysics(!pausePhysics);
+        }}
+      >
+        Pause Physics
+      </button>
+    </>
+  );
 };
