@@ -5,6 +5,15 @@
   text-align: center;
 }
 
+label {
+  input {
+    margin-inline: 0.5em;
+  }
+  input[type="number"] {
+    width: 5ch;
+  }
+}
+
 .row {
   display: flex;
   flex-direction: row;
@@ -15,18 +24,27 @@
   width: 30px;
   border: 1px solid hsl(from white h s 40%);
   margin: 2px;
+  user-select: none;
 }
 
 .water {
   background-color: hsl(from blue h 70% l);
 }
 
-.ground {
+.grass {
   background-color: hsl(from green h 70% l);
+}
+
+.dirt {
+  background-color: hsl(from #3e160a h 70% l);
 }
 
 .grill {
   background-color: hsl(from red h 70% l);
+}
+
+.air {
+  background-color: hsl(from blue h 40% l);
 }
 
 .player-direction-controls {
@@ -48,6 +66,12 @@
   :nth-child(3) {
     flex-basis: 50%;
   }
+}
+
+.layer-control {
+  padding: 0px;
+  height: 35px;
+  width: 35px;
 }
 
 .cytoscape-target {
