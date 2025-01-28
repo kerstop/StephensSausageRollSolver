@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { IVec3, LevelDescription, LevelGraph, Sausage } from "./types";
-import SolutionWorker from "./worker?worker";
 import { produce } from "immer";
 import TileGrid from "./LevelEditor/TileGrid";
+import { solve } from "solver";
 interface Args {
   setSolution: (solution: LevelGraph) => void;
   lenX: number;
@@ -13,8 +13,6 @@ interface Args {
 type Tool = "remove" | "grass" | "dirt" | "grill";
 
 function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
-  const worker = useRef(new SolutionWorker());
-
   const [groundTiles, setGroundTiles] = useState<Set<string>>(new Set());
   const [grillTiles, setGrillTiles] = useState<Set<string>>(new Set());
 
@@ -25,7 +23,6 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
     [0, -1, 0] | [1, 0, 0] | [0, 1, 0] | [-1, 0, 0]
   >([0, -1, 0]);
   const [playerPos, setPlayerPos] = useState<IVec3 | null>(null);
-  const [waiting, setWaiting] = useState<boolean>(false);
 
   const levelDescription = (() => {
     let playerDirVector = playerDir;
@@ -45,6 +42,24 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
       sausages,
     };
   })();
+
+  const loadLevelDescription: (description: LevelDescription) => void = (
+    description: LevelDescription,
+  ) => {
+    if (IVec3.compare(description.start_dir, [1, 0, 0]))
+      setPlayerDir([1, 0, 0]);
+    if (IVec3.compare(description.start_dir, [-1, 0, 0]))
+      setPlayerDir([-1, 0, 0]);
+    if (IVec3.compare(description.start_dir, [0, 1, 0]))
+      setPlayerDir([0, 1, 0]);
+    if (IVec3.compare(description.start_dir, [0, -1, 0]))
+      setPlayerDir([0, -1, 0]);
+
+    setPlayerPos(description.start_pos);
+    setSausages(description.sausages);
+    setGroundTiles(new Set(description.ground.map((t) => JSON.stringify(t))));
+    setGrillTiles(new Set(description.grills.map((t) => JSON.stringify(t))));
+  };
 
   const clearTile: (x: number, y: number, z: number) => void = (
     x: number,
@@ -87,32 +102,21 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   };
 
   useEffect(() => {
-    worker.current.onmessage = (e) => {
-      setWaiting(false);
-      setSolution(e.data);
-      return () => worker.current.terminate();
-    };
-  }, [worker]);
+    const data = JSON.parse(
+      '{"start_pos":[2,2,1],"start_dir":[1,0,0],"ground":[[2,2,0],[3,2,0],[4,2,0],[4,1,0]],"grills":[[5,1,0],[5,2,0],[6,2,0],[6,1,0]],"sausages":[{"pos":[4,1,1],"cooked":[[0,0],[0,0]],"orientation":"Vertical"}]}',
+    ) as LevelDescription;
+    loadLevelDescription(data);
+    setSolution(JSON.parse(solve(data)));
+  }, []);
 
   return (
     <>
-      {waiting ? <p>waiting for solution</p> : null}
       <form
         action={(e: FormData) => {
           const data = JSON.parse(
             e.get("data")?.toString() ?? "{}",
           ) as LevelDescription;
-          if (IVec3.compare(data.start_dir, [1, 0, 0])) setPlayerDir([1, 0, 0]);
-          if (IVec3.compare(data.start_dir, [-1, 0, 0]))
-            setPlayerDir([-1, 0, 0]);
-          if (IVec3.compare(data.start_dir, [0, 1, 0])) setPlayerDir([0, 1, 0]);
-          if (IVec3.compare(data.start_dir, [0, -1, 0]))
-            setPlayerDir([0, -1, 0]);
-
-          setPlayerPos(data.start_pos);
-          setSausages(data.sausages);
-          setGroundTiles(new Set(data.ground.map((t) => JSON.stringify(t))));
-          setGrillTiles(new Set(data.grills.map((t) => JSON.stringify(t))));
+          loadLevelDescription(data);
         }}
       >
         <label>
@@ -326,8 +330,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
             return des.start_pos !== null;
           };
           if (isInitialized(levelDescription)) {
-            setWaiting(true);
-            worker.current.postMessage(levelDescription);
+            setSolution(JSON.parse(solve(LevelDescription)));
           }
         }}
       >

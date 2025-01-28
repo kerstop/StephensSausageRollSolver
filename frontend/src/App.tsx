@@ -14,7 +14,6 @@ function App() {
 
   return (
     <>
-      <MyGraph />
       <form>
         <label>
           Width
@@ -68,7 +67,6 @@ function App() {
       {solution !== null ? (
         <>
           <MyGraph solution={solution} />
-          <Graph level={solution} />
         </>
       ) : (
         ""

@@ -3,8 +3,7 @@ import { Vector3 } from "three";
 
 export interface Message {
   graph?: LevelGraph;
-  pin?: number[];
-  unpin?: number[];
+  togglePin: number;
   pause?: boolean;
 }
 
@@ -84,21 +83,12 @@ self.onmessage = (e: MessageEvent<Message>) => {
 
     requestAnimationFrame(getNextFrame);
   }
-  if (message.pin !== undefined) {
-    message.pin.forEach((n) => {
-      let node = nodes.get(n);
-      if (node !== undefined) {
-        node.pinned = true;
-      }
-    });
-  }
-  if (message.unpin !== undefined) {
-    message.unpin.forEach((n) => {
-      let node = nodes.get(n);
-      if (node !== undefined) {
-        node.pinned = false;
-      }
-    });
+  if (message.togglePin !== undefined) {
+    let node = nodes.get(message.togglePin);
+    if (node !== undefined) {
+      node.pinned = !node.pinned;
+      node.velocity.set(0, 0, 0);
+    }
   }
   if (message.pause !== undefined) {
     if (paused && !message.pause) {
@@ -225,13 +215,6 @@ const getNextFrame = () => {
     node.position.add(node.velocity);
     node.force.set(0, 0, 0);
   }
-
-  console.log(
-    `
-total movement ${total}
-average movement ${total / nodes.size}
-`.trim(),
-  );
 
   let message: FrameEvent[] = [];
   for (const [id, node] of nodes.entries()) {
