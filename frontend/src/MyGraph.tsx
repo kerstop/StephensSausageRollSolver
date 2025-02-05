@@ -18,8 +18,8 @@ const colors = {
 
 export const MyGraph = ({ solution }: Args) => {
   const container = useRef<null | HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState(new THREE.Vector2());
-  const [renderer, setRenderer] = useState(new THREE.WebGLRenderer());
+  const [mousePos, setMousePos] = useState(() => new THREE.Vector2());
+  const [renderer, setRenderer] = useState(() => new THREE.WebGLRenderer());
   useEffect(() => {
     renderer.setSize(800, 600);
     return () => {
@@ -35,7 +35,7 @@ export const MyGraph = ({ solution }: Args) => {
     };
   }, [renderer, mousePos]);
 
-  const [scene, setScene] = useState(new THREE.Scene());
+  const [scene, setScene] = useState(() => new THREE.Scene());
   useEffect(() => {
     const sunLamp = new THREE.DirectionalLight(0xffffff, 1);
     sunLamp.position.set(1, 1, 1);
@@ -52,7 +52,7 @@ export const MyGraph = ({ solution }: Args) => {
   }, [scene]);
 
   const [camera, setCamera] = useState(
-    new THREE.PerspectiveCamera(75, 4 / 3, 0.1, 1000),
+    () => new THREE.PerspectiveCamera(75, 4 / 3, 0.1, 1000),
   );
   useEffect(() => {
     camera.position.set(10, 10, 20).multiplyScalar(10);
@@ -70,7 +70,20 @@ export const MyGraph = ({ solution }: Args) => {
   }, [controls]);
 
   const [pausePhysics, setPausePhysics] = useState(false);
-  const physicsWorker = useRef(new PhysicsWorker());
+  const [physicsFrame, setPhysicsFrame] = useState(0);
+  const [physicsWorker, _] = useState(() => {
+    return new PhysicsWorker();
+  });
+
+  useEffect(() => {
+    physicsWorker.postMessage({
+      graph: solution,
+      pause: false,
+    } as PhysicsWorkerDefs.Message);
+  }, [solution]);
+
+  useEffect(() => {}, [physicsWorker]);
+
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(
     null,
   );
@@ -83,17 +96,6 @@ export const MyGraph = ({ solution }: Args) => {
       indexToHash.set(i, state.id);
     });
     return [hashToIndex, indexToHash];
-  }, [solution]);
-
-  useEffect(() => {
-    physicsWorker.current = new PhysicsWorker();
-    physicsWorker.current.postMessage({
-      graph: solution,
-      pause: false,
-    } as PhysicsWorkerDefs.Message);
-    return () => {
-      physicsWorker.current.terminate();
-    };
   }, [solution]);
 
   const meshes = useMemo(() => {
@@ -117,6 +119,31 @@ export const MyGraph = ({ solution }: Args) => {
     if (meshes.instanceColor !== null) meshes.instanceColor.needsUpdate = true;
     return meshes;
   }, [solution]);
+
+  useEffect(() => {
+    let points = [];
+
+    let src_pos = new THREE.Matrix4();
+    let dst_pos = new THREE.Matrix4();
+    for (const edge of solution.edges) {
+      const src_i = hashToIndex.get(edge.source);
+      const dst_i = hashToIndex.get(edge.target);
+      if (dst_i === undefined || src_i === undefined) continue;
+      meshes.getMatrixAt(src_i, src_pos);
+      meshes.getMatrixAt(dst_i, dst_pos);
+      points.push(new THREE.Vector3().setFromMatrixPosition(src_pos));
+      points.push(new THREE.Vector3().setFromMatrixPosition(dst_pos));
+    }
+
+    let lines = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({ color: 0x000000 }),
+    );
+    scene.add(lines);
+    return () => {
+      scene.remove(lines);
+    };
+  }, [solution, meshes, scene, physicsFrame]);
 
   useEffect(() => {
     scene.add(meshes);
@@ -143,19 +170,23 @@ export const MyGraph = ({ solution }: Args) => {
   }, [container, renderer]);
 
   useEffect(() => {
-    physicsWorker.current.onmessage = (e) => {
+    physicsWorker.onmessage = (e) => {
       const data = e.data as PhysicsWorkerDefs.FrameEvent[];
       data.forEach(({ id, position }) => {
         let nodeIndex = hashToIndex.get(id);
-        Object.setPrototypeOf(position, THREE.Vector3.prototype);
         if (nodeIndex !== undefined) {
           meshes.setMatrixAt(
             nodeIndex,
-            new THREE.Matrix4().makeTranslation(position),
+            new THREE.Matrix4().makeTranslation(
+              position.x,
+              position.y,
+              position.z,
+            ),
           );
         }
       });
       meshes.instanceMatrix.needsUpdate = true;
+      setPhysicsFrame((f) => f + 1);
     };
   }, [solution, meshes]);
 
@@ -195,7 +226,7 @@ export const MyGraph = ({ solution }: Args) => {
         defaultValue={""}
         className={`${pausePhysics ? "active" : null}`}
         onClick={() => {
-          physicsWorker.current.postMessage({
+          physicsWorker.postMessage({
             pause: !pausePhysics,
           } as PhysicsWorkerDefs.Message);
           setPausePhysics(!pausePhysics);
@@ -208,10 +239,9 @@ export const MyGraph = ({ solution }: Args) => {
           onClick={() => {
             let nodeHash = indexToHash.get(selectedNodeIndex);
             if (nodeHash !== undefined) {
-              let message: PhysicsWorkerDefs.Message = {
+              physicsWorker.postMessage({
                 togglePin: nodeHash,
-              };
-              physicsWorker.current.postMessage(message);
+              } as PhysicsWorkerDefs.Message);
             }
           }}
         >

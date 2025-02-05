@@ -1,15 +1,20 @@
 import { LevelGraph, LevelState } from "./types";
-import { Vector3 } from "three";
+import { Vector3, Vector3Like } from "three";
+
+console.log("init");
 
 export interface Message {
   graph?: LevelGraph;
   togglePin: number;
   pause?: boolean;
+  grabNode?: number;
+  releaseNode?: number;
+  drag?: Vector3Like;
 }
 
 export interface FrameEvent {
   id: number;
-  position: Vector3;
+  position: Vector3Like;
 }
 
 interface Node {
@@ -20,23 +25,91 @@ interface Node {
   pinned: boolean;
 }
 
-let frame = 0;
+let frame: number = 0;
 let nodes: Map<number, Node> = new Map();
 let edges: [number, number][] = [];
 let paused: boolean = false;
-let initialized: boolean = false;
-let _prevTime: DOMHighResTimeStamp = performance.now();
 
 let max_speed: number = 100;
 let optimalLength: number = 10;
 let damping: number = 0.01;
 let springStiffness: number = 0.1;
 let dispersionForceMultiplier: number = 1;
-let dispersionForceFalloff: number = 10;
+let dispersionForceFalloff: number = 50;
+
+class PositionIndex {
+  index = new Map<string, Node[]>();
+
+  update(nodes: Map<number, Node>): void {
+    this.index.clear();
+
+    for (let node of nodes.values()) {
+      let indexValue = JSON.stringify(
+        node.position
+          .clone()
+          .multiplyScalar(1 / (dispersionForceFalloff * 2))
+          .floor(),
+      );
+      let indexVoxel = this.index.get(indexValue);
+      if (indexVoxel !== undefined) {
+        indexVoxel.push(node);
+      } else {
+        this.index.set(indexValue, [node]);
+      }
+    }
+  }
+
+  getEffectedNodes(pos: Vector3): Node[] {
+    let effectedChunksCords = [
+      pos
+        .clone()
+        .multiplyScalar(1 / (dispersionForceFalloff * 2))
+        .round(),
+    ];
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: 0, z: 0 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: 0, y: -1, z: 0 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: 0, y: 0, z: -1 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: -1, z: 0 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: 0, y: -1, z: -1 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: 0, z: -1 }),
+    );
+    effectedChunksCords.push(
+      effectedChunksCords[0].clone().add({ x: -1, y: -1, z: -1 }),
+    );
+
+    let effectedNodes = [];
+    for (let effectedChunkCord of effectedChunksCords) {
+      let effectedChunk =
+        this.index.get(JSON.stringify(effectedChunkCord)) ?? [];
+      for (let node of effectedChunk) {
+        if (
+          new Vector3().subVectors(pos, node.position).length() <
+          dispersionForceFalloff
+        )
+          effectedNodes.push(node);
+      }
+    }
+    return effectedNodes;
+  }
+}
 
 self.onmessage = (e: MessageEvent<Message>) => {
   let message = e.data;
-  if (message.graph !== undefined && !initialized) {
+  if (message.graph !== undefined) {
+    frame = 0;
+    nodes = new Map();
+    edges = [];
     message.graph.states.forEach((state) => {
       let position = new Vector3();
       position.random();
@@ -98,66 +171,13 @@ self.onmessage = (e: MessageEvent<Message>) => {
   }
 };
 
+let positionIndex = new PositionIndex();
 const getNextFrame = () => {
   performance.mark("PhysicsStart");
-  let positionIndex = new Map<string, Node[]>();
-  for (let node of nodes.values()) {
-    let indexValue = JSON.stringify(
-      node.position
-        .clone()
-        .multiplyScalar(1 / (dispersionForceFalloff * 2))
-        .floor(),
-    );
-    let indexVoxel = positionIndex.get(indexValue);
-    if (indexVoxel !== undefined) {
-      indexVoxel.push(node);
-    } else {
-      positionIndex.set(indexValue, [node]);
-    }
-  }
-  let getEffectedNodes = (pos: Vector3) => {
-    let effectedChunksCords = [
-      pos
-        .clone()
-        .multiplyScalar(1 / (dispersionForceFalloff * 2))
-        .round(),
-    ];
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: -1, y: 0, z: 0 }),
-    );
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: 0, y: -1, z: 0 }),
-    );
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: 0, y: 0, z: -1 }),
-    );
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: -1, y: -1, z: 0 }),
-    );
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: 0, y: -1, z: -1 }),
-    );
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: -1, y: 0, z: -1 }),
-    );
-    effectedChunksCords.push(
-      effectedChunksCords[0].clone().add({ x: -1, y: -1, z: -1 }),
-    );
 
-    let effectedNodes = [];
-    for (let effectedChunkCord of effectedChunksCords) {
-      let effectedChunk =
-        positionIndex.get(JSON.stringify(effectedChunkCord)) ?? [];
-      for (let node of effectedChunk) {
-        if (
-          new Vector3().subVectors(pos, node.position).length() <
-          dispersionForceFalloff
-        )
-          effectedNodes.push(node);
-      }
-    }
-    return effectedNodes;
-  };
+  positionIndex.update(nodes);
+
+  const scratch = new Vector3();
 
   edges.forEach((edge) => {
     let n1 = nodes.get(edge[0]);
@@ -169,47 +189,36 @@ const getNextFrame = () => {
     if (n1.pinned && n2.pinned) return;
     if (n2.pinned) [n1, n2] = [n2, n1];
 
-    let d = new Vector3().subVectors(n2.position, n1.position);
-    d.setLength(optimalLength - d.length());
-    d.multiplyScalar(springStiffness);
+    scratch.subVectors(n2.position, n1.position);
+    scratch.setLength(optimalLength - scratch.length());
+    scratch.multiplyScalar(springStiffness);
     if (n1.pinned) {
-      n2.force.add(d);
+      n2.force.add(scratch);
     } else {
-      d.multiplyScalar(0.5);
-      n2.force.add(d);
-      d.multiplyScalar(-1);
-      n1.force.add(d);
+      scratch.multiplyScalar(0.5);
+      n2.force.add(scratch);
+      scratch.multiplyScalar(-1);
+      n1.force.add(scratch);
     }
   });
 
   for (const node of nodes.values()) {
-    if (node.neighbors.length > 1) {
-      let average_neighbors_position = new Vector3();
-      node.neighbors.forEach((neighbor) => {
-        average_neighbors_position.add(neighbor.position);
-      });
+    if (!node.pinned) {
+      for (const node2 of positionIndex.getEffectedNodes(node.position)) {
+        if (node === node2) continue;
+        scratch.subVectors(node.position, node2.position);
+        let distance_sqr = scratch.lengthSq();
 
-      if (!node.pinned) {
-        let force_vector = new Vector3();
-        for (const node2 of getEffectedNodes(node.position)) {
-          if (node === node2) continue;
-          force_vector.subVectors(node.position, node2.position);
-          let distance_sqr = force_vector.lengthSq();
-
-          node.force.add(
-            force_vector
-              .normalize()
-              .multiplyScalar(dispersionForceMultiplier * (1 / distance_sqr)),
-          );
-        }
+        node.force.add(
+          scratch
+            .normalize()
+            .multiplyScalar(dispersionForceMultiplier * (1 / distance_sqr)),
+        );
       }
     }
   }
 
-  let total = 0;
-
   for (const node of nodes.values()) {
-    total += node.force.length();
     node.velocity.add(node.force);
     node.velocity.multiplyScalar(1 - damping).clampLength(0, max_speed);
     node.position.add(node.velocity);

@@ -330,7 +330,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
             return des.start_pos !== null;
           };
           if (isInitialized(levelDescription)) {
-            setSolution(JSON.parse(solve(LevelDescription)));
+            setSolution(JSON.parse(solve(levelDescription)));
           }
         }}
       >
