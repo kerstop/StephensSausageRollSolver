@@ -1,31 +1,35 @@
 import { useEffect, useState } from "react";
-import { IVec3, LevelDescription, LevelGraph, Sausage } from "./types";
+import {
+  IVec3,
+  LevelDescription,
+  LevelGraph,
+  Sausage,
+  LevelState,
+} from "./types";
 import { produce } from "immer";
 import TileGrid from "./LevelEditor/TileGrid";
 import { solve } from "solver";
+import SizeControls from "./LevelEditor/SizeControls";
+import Controls, { PlayerDirections, Tool } from "./LevelEditor/Controls";
 interface Args {
   setSolution: (solution: LevelGraph) => void;
-  lenX: number;
-  lenY: number;
-  lenZ: number;
 }
 
-type Tool = "remove" | "grass" | "dirt" | "grill";
-
-function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
+function LevelEditor(args: Args) {
+  const [dimensions, setDimensions] = useState<[number, number, number]>([
+    10, 10, 3,
+  ]);
   const [groundTiles, setGroundTiles] = useState<Set<string>>(new Set());
   const [grillTiles, setGrillTiles] = useState<Set<string>>(new Set());
 
   const [tool, setTool] = useState<Tool>("remove");
 
   const [sausages, setSausages] = useState<Sausage[]>([]);
-  const [playerDir, setPlayerDir] = useState<
-    [0, -1, 0] | [1, 0, 0] | [0, 1, 0] | [-1, 0, 0]
-  >([0, -1, 0]);
-  const [playerPos, setPlayerPos] = useState<IVec3 | null>(null);
+  const [startDir, setStartDir] = useState<PlayerDirections>([0, -1, 0]);
+  const [startPos, setStartPos] = useState<IVec3 | null>(null);
 
   const levelDescription = (() => {
-    let playerDirVector = playerDir;
+    let playerDirVector = startDir;
 
     let ground: IVec3[] = [...groundTiles].map((t) => {
       return JSON.parse(t) as IVec3;
@@ -35,7 +39,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
     });
 
     return {
-      start_pos: playerPos ?? [-1, -1, -1],
+      start_pos: startPos ?? [-1, -1, -1],
       start_dir: playerDirVector,
       ground,
       grills,
@@ -46,16 +50,14 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
   const loadLevelDescription: (description: LevelDescription) => void = (
     description: LevelDescription,
   ) => {
-    if (IVec3.compare(description.start_dir, [1, 0, 0]))
-      setPlayerDir([1, 0, 0]);
+    if (IVec3.compare(description.start_dir, [1, 0, 0])) setStartDir([1, 0, 0]);
     if (IVec3.compare(description.start_dir, [-1, 0, 0]))
-      setPlayerDir([-1, 0, 0]);
-    if (IVec3.compare(description.start_dir, [0, 1, 0]))
-      setPlayerDir([0, 1, 0]);
+      setStartDir([-1, 0, 0]);
+    if (IVec3.compare(description.start_dir, [0, 1, 0])) setStartDir([0, 1, 0]);
     if (IVec3.compare(description.start_dir, [0, -1, 0]))
-      setPlayerDir([0, -1, 0]);
+      setStartDir([0, -1, 0]);
 
-    setPlayerPos(description.start_pos);
+    setStartPos(description.start_pos);
     setSausages(description.sausages);
     setGroundTiles(new Set(description.ground.map((t) => JSON.stringify(t))));
     setGrillTiles(new Set(description.grills.map((t) => JSON.stringify(t))));
@@ -82,8 +84,8 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
         }),
       );
     }
-    if (JSON.stringify(playerPos) === JSON.stringify([x, y, z])) {
-      setPlayerPos(null);
+    if (JSON.stringify(startPos) === JSON.stringify([x, y, z])) {
+      setStartPos(null);
     }
     if (groundTiles.has(JSON.stringify([x, y, z]))) {
       setGroundTiles(
@@ -106,11 +108,12 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
       '{"start_pos":[2,2,1],"start_dir":[1,0,0],"ground":[[2,2,0],[3,2,0],[4,2,0],[4,1,0]],"grills":[[5,1,0],[5,2,0],[6,2,0],[6,1,0]],"sausages":[{"pos":[4,1,1],"cooked":[[0,0],[0,0]],"orientation":"Vertical"}]}',
     ) as LevelDescription;
     loadLevelDescription(data);
-    setSolution(JSON.parse(solve(data)));
+    args.setSolution?.(JSON.parse(solve(data)));
   }, []);
 
   return (
     <>
+      <SizeControls dimensions={dimensions} setDimensions={setDimensions} />
       <form
         action={(e: FormData) => {
           const data = JSON.parse(
@@ -124,95 +127,17 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
           <input type="text" name="data" />
         </label>
       </form>
-      <div className="controls">
-        <button
-          className={tool === "remove" ? "active" : ""}
-          onClick={() => setTool("remove")}
-        >
-          Remove
-        </button>
-        <button
-          className={tool === "dirt" ? "active" : ""}
-          onClick={() => setTool("dirt")}
-        >
-          Dirt
-        </button>
-        <button
-          className={tool === "grass" ? "active" : ""}
-          onClick={() => setTool("grass")}
-        >
-          Grass
-        </button>
-        <button
-          className={tool === "grill" ? "active" : ""}
-          onClick={() => setTool("grill")}
-        >
-          Grill
-        </button>
-        <button
-          draggable="true"
-          onDragStart={(e) => {
-            e.dataTransfer.setData("internal", "horizontal");
-          }}
-        >
-          Sausage - H
-        </button>
-        <button
-          draggable="true"
-          onDragStart={(e) => {
-            e.dataTransfer.setData("internal", "vertical");
-          }}
-        >
-          Sausage - V
-        </button>
-        <button
-          draggable="true"
-          onDragStart={(e) => {
-            e.dataTransfer.setData("internal", "player");
-          }}
-        >
-          Player
-        </button>
-        <div className="player-direction-controls">
-          <button
-            className={IVec3.compare(playerDir, [0, -1, 0]) ? "active" : ""}
-            onClick={() => {
-              setPlayerDir([0, -1, 0]);
-            }}
-          >
-            Up
-          </button>
-          <button
-            className={IVec3.compare(playerDir, [-1, 0, 0]) ? "active" : ""}
-            onClick={() => {
-              setPlayerDir([-1, 0, 0]);
-            }}
-          >
-            Left
-          </button>
-          <button
-            className={IVec3.compare(playerDir, [1, 0, 0]) ? "active" : ""}
-            onClick={() => {
-              setPlayerDir([1, 0, 0]);
-            }}
-          >
-            right
-          </button>
-          <button
-            className={IVec3.compare(playerDir, [0, 1, 0]) ? "active" : ""}
-            onClick={() => {
-              setPlayerDir([0, 1, 0]);
-            }}
-          >
-            down
-          </button>
-        </div>
-      </div>
+      <Controls
+        tool={tool}
+        setTool={setTool}
+        playerDir={startDir}
+        setPlayerDir={setStartDir}
+      />
       <TileGrid
         description={levelDescription}
-        lenX={lenX}
-        lenY={lenY}
-        lenZ={lenZ}
+        lenX={dimensions[0]}
+        lenY={dimensions[1]}
+        lenZ={dimensions[2]}
         onDrop={(e, x, y, viewedLayer) => {
           let data = e.dataTransfer.getData("internal");
           if (data.length > 0) {
@@ -251,7 +176,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
                 break;
               case "player":
                 clearTile(x, y, viewedLayer);
-                setPlayerPos([x, y, viewedLayer]);
+                setStartPos([x, y, viewedLayer]);
                 break;
             }
           }
@@ -270,10 +195,8 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
                   );
                 }),
               );
-            } else if (
-              JSON.stringify(playerPos) === JSON.stringify([x, y, z])
-            ) {
-              setPlayerPos(null);
+            } else if (JSON.stringify(startPos) === JSON.stringify([x, y, z])) {
+              setStartPos(null);
             } else if (groundTiles.has(JSON.stringify([x, y, z]))) {
               setGroundTiles(
                 produce(groundTiles, (s) => {
@@ -330,7 +253,7 @@ function LevelEditor({ setSolution, lenY, lenX, lenZ }: Args) {
             return des.start_pos !== null;
           };
           if (isInitialized(levelDescription)) {
-            setSolution(JSON.parse(solve(levelDescription)));
+            args.setSolution(JSON.parse(solve(levelDescription)));
           }
         }}
       >

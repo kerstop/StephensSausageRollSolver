@@ -1,25 +1,40 @@
-import * as THREE from "three";
+import * as Three from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { LevelGraph, LevelState } from "./types";
 import PhysicsWorker from "./physicsWorker?worker";
 import * as PhysicsWorkerDefs from "./physicsWorker";
-import data from "./tmp.json";
+import LevelEditor from "./LevelEditor";
+import TileGrid from "./LevelEditor/TileGrid";
 
 interface Args {
   solution: LevelGraph;
 }
 
 const colors = {
-  defaultColor: new THREE.Color().setHex(0xb8afa2),
-  selectedColor: new THREE.Color().setHex(0xfff176),
+  defaultColor: new Three.Color().setHex(0xb8afa2),
+  selectedColor: new Three.Color().setHex(0xfff176),
+  burntColor: new Three.Color().setHex(0xa80a01),
+  lostColor: new Three.Color().setHex(0x013ea8),
+  originColor: new Three.Color().setHex(0x62af54),
+  solvedColor: new Three.Color().setHex(0x1aa801),
+};
+
+const getColor: (state: LevelState) => Three.Color = (state: LevelState) => {
+  if (state.is_initial) return colors.originColor;
+  if (state.status === "Lost") return colors.lostColor;
+  if (state.status === "Solution") return colors.solvedColor;
+  if (state.status === "Burnt") return colors.burntColor;
+  return colors.defaultColor;
 };
 
 export const MyGraph = ({ solution }: Args) => {
   const container = useRef<null | HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState(() => new THREE.Vector2());
-  const [renderer, setRenderer] = useState(() => new THREE.WebGLRenderer());
+  const [mousePos, setMousePos] = useState(() => new Three.Vector2());
+  const [renderer, setRenderer] = useState(() => new Three.WebGLRenderer());
+  const [selectedLevelState, setSelectedLevelState] =
+    useState<null | LevelState>(null);
   useEffect(() => {
     renderer.setSize(800, 600);
     return () => {
@@ -35,39 +50,40 @@ export const MyGraph = ({ solution }: Args) => {
     };
   }, [renderer, mousePos]);
 
-  const [scene, setScene] = useState(() => new THREE.Scene());
+  const [scene, setScene] = useState(() => new Three.Scene());
   useEffect(() => {
-    const sunLamp = new THREE.DirectionalLight(0xffffff, 1);
+    const sunLamp = new Three.DirectionalLight(0xffffff, 1);
     sunLamp.position.set(1, 1, 1);
     scene.add(sunLamp);
 
-    const ambientLamp = new THREE.AmbientLight(0xffffff, 1);
+    const ambientLamp = new Three.AmbientLight(0xffffff, 1);
     scene.add(ambientLamp);
 
     const sky = new Sky();
     sky.scale.setScalar(45000);
-    const sunPosition = new THREE.Vector3(1, 1, 1);
+    const sunPosition = new Three.Vector3(1, 1, 1);
     sky.material.uniforms.sunPosition.value = sunPosition;
     scene.add(sky);
   }, [scene]);
 
   const [camera, setCamera] = useState(
-    () => new THREE.PerspectiveCamera(75, 4 / 3, 0.1, 1000),
+    () => new Three.PerspectiveCamera(75, 4 / 3, 0.1, 1000),
   );
   useEffect(() => {
     camera.position.set(10, 10, 20).multiplyScalar(10);
   }, [camera]);
 
-  const [raycast, setRaycast] = useState(new THREE.Raycaster());
+  const [raycast, setRaycast] = useState(new Three.Raycaster());
 
-  const controls = useMemo(
-    () => new OrbitControls(camera, renderer.domElement),
-    [renderer],
-  );
-  useEffect(() => {
-    controls.enableDamping = true;
-    controls.update();
-  }, [controls]);
+  const controls = useMemo(() => {
+    let c = new OrbitControls(camera, renderer.domElement);
+    c.maxPolarAngle = Math.PI * 0.8;
+    c.enableDamping = true;
+    c.screenSpacePanning = false;
+    c.update();
+    return c;
+  }, [renderer]);
+  useEffect(() => {}, [controls]);
 
   const [pausePhysics, setPausePhysics] = useState(false);
   const [physicsFrame, setPhysicsFrame] = useState(0);
@@ -99,13 +115,13 @@ export const MyGraph = ({ solution }: Args) => {
   }, [solution]);
 
   const meshes = useMemo(() => {
-    const geometry = new THREE.SphereGeometry();
+    const geometry = new Three.SphereGeometry();
 
-    const material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color().setHex(0xffffff),
+    const material = new Three.MeshStandardMaterial({
+      color: new Three.Color().setHex(0xffffff),
     });
 
-    const meshes = new THREE.InstancedMesh(
+    const meshes = new Three.InstancedMesh(
       geometry,
       material,
       solution.states.length,
@@ -114,7 +130,7 @@ export const MyGraph = ({ solution }: Args) => {
     meshes.userData["levelStates"] = [];
     solution.states.forEach((state, i) => {
       meshes.userData["levelStates"].push(state);
-      meshes.setColorAt(i, colors.defaultColor);
+      meshes.setColorAt(i, getColor(state));
     });
     if (meshes.instanceColor !== null) meshes.instanceColor.needsUpdate = true;
     return meshes;
@@ -123,21 +139,21 @@ export const MyGraph = ({ solution }: Args) => {
   useEffect(() => {
     let points = [];
 
-    let src_pos = new THREE.Matrix4();
-    let dst_pos = new THREE.Matrix4();
+    let src_pos = new Three.Matrix4();
+    let dst_pos = new Three.Matrix4();
     for (const edge of solution.edges) {
       const src_i = hashToIndex.get(edge.source);
       const dst_i = hashToIndex.get(edge.target);
       if (dst_i === undefined || src_i === undefined) continue;
       meshes.getMatrixAt(src_i, src_pos);
       meshes.getMatrixAt(dst_i, dst_pos);
-      points.push(new THREE.Vector3().setFromMatrixPosition(src_pos));
-      points.push(new THREE.Vector3().setFromMatrixPosition(dst_pos));
+      points.push(new Three.Vector3().setFromMatrixPosition(src_pos));
+      points.push(new Three.Vector3().setFromMatrixPosition(dst_pos));
     }
 
-    let lines = new THREE.LineSegments(
-      new THREE.BufferGeometry().setFromPoints(points),
-      new THREE.LineBasicMaterial({ color: 0x000000 }),
+    let lines = new Three.LineSegments(
+      new Three.BufferGeometry().setFromPoints(points),
+      new Three.LineBasicMaterial({ color: 0x000000 }),
     );
     scene.add(lines);
     return () => {
@@ -177,7 +193,7 @@ export const MyGraph = ({ solution }: Args) => {
         if (nodeIndex !== undefined) {
           meshes.setMatrixAt(
             nodeIndex,
-            new THREE.Matrix4().makeTranslation(
+            new Three.Matrix4().makeTranslation(
               position.x,
               position.y,
               position.z,
@@ -192,13 +208,24 @@ export const MyGraph = ({ solution }: Args) => {
 
   useEffect(() => {
     if (selectedNodeIndex !== null) {
+      let m = new Three.Matrix4();
+      meshes.getMatrixAt(selectedNodeIndex, m);
+      controls.target = new Three.Vector3().setFromMatrixPosition(m);
+      controls.cursor = new Three.Vector3();
       meshes.setColorAt(selectedNodeIndex, colors.selectedColor);
       if (meshes.instanceColor !== null)
         meshes.instanceColor.needsUpdate = true;
+
+      setSelectedLevelState(
+        meshes.userData["levelStates"][selectedNodeIndex] ?? null,
+      );
     }
     return () => {
       if (selectedNodeIndex !== null) {
-        meshes.setColorAt(selectedNodeIndex, colors.defaultColor);
+        meshes.setColorAt(
+          selectedNodeIndex,
+          getColor(meshes.userData["levelStates"][selectedNodeIndex]),
+        );
         if (meshes.instanceColor !== null)
           meshes.instanceColor.needsUpdate = true;
       }
@@ -249,6 +276,15 @@ export const MyGraph = ({ solution }: Args) => {
         </button>
       ) : (
         <button disabled>Pin</button>
+      )}
+      {selectedLevelState !== null && (
+        <TileGrid
+          description={solution.level_description}
+          state={selectedLevelState}
+          lenX={10}
+          lenY={10}
+          lenZ={3}
+        />
       )}
     </>
   );

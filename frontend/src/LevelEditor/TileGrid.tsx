@@ -1,5 +1,9 @@
 import { IVec3, LevelDescription, LevelState } from "../types";
-import { DragEvent, useState } from "react";
+import React, { DragEvent, JSX, ReactElement, useState } from "react";
+import stephenSVG from "./stephen.svg";
+import stephenGoalSVG from "./stephen_goal.svg";
+import forkSVG from "./fork.svg";
+import forkGoalSVG from "./fork_goal.svg";
 
 const TileGrid = (args: {
   description: LevelDescription;
@@ -34,6 +38,42 @@ const TileGrid = (args: {
     );
   }
 
+  const forkStyle: React.CSSProperties = {};
+  if (
+    args.state?.player_dir &&
+    IVec3.compare(args.state?.player_dir, [1, 0, 0])
+  )
+    forkStyle.transform = "rotate(0.25turn)";
+  if (
+    args.state?.player_dir &&
+    IVec3.compare(args.state?.player_dir, [0, 1, 0])
+  )
+    forkStyle.transform = "rotate(0.5turn)";
+  if (
+    args.state?.player_dir &&
+    IVec3.compare(args.state?.player_dir, [-1, 0, 0])
+  )
+    forkStyle.transform = "rotate(0.75turn)";
+
+  const stephen = <img src={stephenSVG} className="icon" />;
+  const fork: ReactElement<JSX.IntrinsicElements["img"]> = (
+    <img src={forkSVG} className="icon" style={forkStyle} />
+  );
+
+  const goalStephen = <img src={stephenGoalSVG} className="icon" />;
+
+  const goalForkStyle: React.CSSProperties = {};
+  if (IVec3.compare(args.description.start_dir, [1, 0, 0]))
+    goalForkStyle.transform = "rotate(0.25turn)";
+  if (IVec3.compare(args.description.start_dir, [0, 1, 0]))
+    goalForkStyle.transform = "rotate(0.5turn)";
+  if (IVec3.compare(args.description.start_dir, [-1, 0, 0]))
+    goalForkStyle.transform = "rotate(0.75turn)";
+
+  const goalFork = (
+    <img src={forkGoalSVG} className="icon" style={goalForkStyle} />
+  );
+
   const tiles = [];
   for (let y = 0; y < args.lenY; y++) {
     const row = [];
@@ -64,17 +104,24 @@ const TileGrid = (args: {
             if (args.onClick) args.onClick(x, y, z);
           }}
         >
-          {
-            LevelDescription.getSausageAt(args.description, [x, y, z])
-              ?.orientation[0]
-          }
-          {IVec3.compare(args.description.start_pos, [x, y, z]) ? "P" : ""}
+          {args.state !== undefined
+            ? LevelState.getSausageAt(args.state, [x, y, z])?.orientation[0]
+            : LevelDescription.getSausageAt(args.description, [x, y, z])
+                ?.orientation[0]}
+          {IVec3.compare(args.description.start_pos, [x, y, z]) && goalStephen}
           {IVec3.compare(
             IVec3.add(args.description.start_pos, args.description.start_dir),
             [x, y, z],
-          )
-            ? "F"
-            : ""}
+          ) && goalFork}
+          {args.state &&
+            IVec3.compare(args.state.player_pos, [x, y, z]) &&
+            stephen}
+          {args.state &&
+            IVec3.compare(
+              IVec3.add(args.state.player_pos, args.state.player_dir),
+              [x, y, z],
+            ) &&
+            fork}
         </div>,
       );
     }

@@ -3,6 +3,8 @@
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  --tile-width: 30px;
+  --tile-height: 30px;
 }
 
 label {
@@ -20,11 +22,12 @@ label {
 }
 
 .tile {
-  height: 30px;
-  width: 30px;
+  height: var(--tile-height);
+  width: var(--tile-width);
   border: 1px solid hsl(from white h s 40%);
   margin: 2px;
   user-select: none;
+  position: relative;
 }
 
 .water {
@@ -94,4 +97,13 @@ code {
 .tilegrid {
   display: inline-block;
   margin-inline: auto;
+}
+
+.icon {
+  height: var(--tile-height);
+  width: var(--tile-width);
+  transform-origin: center;
+  position: absolute;
+  top: 0px;
+  left: 0px;
 }

@@ -31,11 +31,12 @@ export interface LevelState {
   player_dir: IVec3;
   sausages: Sausage[];
   neighbors: NodeNeighbors | null;
-  status: "Lost" | "Unsolved" | "Solved" | "Burnt";
+  status: "Lost" | "Unsolved" | "Solution" | "Burnt";
+  is_initial: boolean;
 }
 
 export namespace LevelState {
-  export function getSausageAt(des: LevelDescription, pos: IVec3) {
+  export function getSausageAt(des: LevelState, pos: IVec3) {
     return (
       des.sausages.find((s) => {
         if (IVec3.compare(s.pos, pos)) {
