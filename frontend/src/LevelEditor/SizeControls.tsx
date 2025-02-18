@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 function SizeControls(args: {
   dimensions: [number, number, number];
   setDimensions: (arg: [number, number, number]) => void;

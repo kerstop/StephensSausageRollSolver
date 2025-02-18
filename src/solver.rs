@@ -260,10 +260,14 @@ impl LevelState {
         };
 
         if self.player_dir == input
-            && self
+            && (self
                 .description
                 .get_tile_type(self.player_pos + input + IVec3::NEG_Z)
                 == TileType::Ground
+                || self
+                    .description
+                    .get_tile_type(self.player_pos + input + IVec3::NEG_Z)
+                    == TileType::Grill)
         {
             if state.can_push(state.player_pos + (state.player_dir * 2), state.player_dir) {
                 state.push(state.player_pos + (state.player_dir * 2), state.player_dir);
@@ -271,10 +275,14 @@ impl LevelState {
             state.player_pos += state.player_dir;
         }
         if -self.player_dir == input
-            && self
+            && (self
                 .description
                 .get_tile_type(self.player_pos - self.player_dir + IVec3::NEG_Z)
                 == TileType::Ground
+                || self
+                    .description
+                    .get_tile_type(self.player_pos - self.player_dir + IVec3::NEG_Z)
+                    == TileType::Grill)
             && state.can_push(state.player_pos - state.player_dir, -state.player_dir)
         {
             state.push(state.player_pos - state.player_dir, -state.player_dir);

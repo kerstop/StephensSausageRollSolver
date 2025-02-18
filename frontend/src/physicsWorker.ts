@@ -1,7 +1,5 @@
-import { LevelGraph, LevelState } from "./types";
+import { LevelGraph } from "./types";
 import { Vector3, Vector3Like } from "three";
-
-console.log("init");
 
 export interface Message {
   graph?: LevelGraph;

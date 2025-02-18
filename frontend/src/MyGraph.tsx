@@ -1,11 +1,10 @@
-import * as Three from "three";
+import * as Three from "three/webgpu";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { LevelGraph, LevelState } from "./types";
 import PhysicsWorker from "./physicsWorker?worker";
 import * as PhysicsWorkerDefs from "./physicsWorker";
-import LevelEditor from "./LevelEditor";
 import TileGrid from "./LevelEditor/TileGrid";
 
 interface Args {
@@ -29,67 +28,59 @@ const getColor: (state: LevelState) => Three.Color = (state: LevelState) => {
   return colors.defaultColor;
 };
 
+const mousePos = new Three.Vector2();
+
+const renderer = new Three.WebGPURenderer();
+renderer.setSize(600, 450);
+renderer.setClearColor(new Three.Color(0xffffff));
+
+renderer.domElement.onmousemove = (e) => {
+  mousePos.x = (e.offsetX / renderer.domElement.width) * 2 - 1;
+  mousePos.y = -(e.offsetY / renderer.domElement.height) * 2 + 1;
+};
+
+const camera = new Three.PerspectiveCamera(75, 4 / 3, 0.1, 1000);
+camera.position.set(10, 10, 20).multiplyScalar(10);
+
+let controls = new OrbitControls(camera, renderer.domElement);
+controls.maxPolarAngle = Math.PI * 0.8;
+controls.enableDamping = true;
+controls.screenSpacePanning = false;
+controls.update();
+
+const scene = new Three.Scene();
+const sunLamp = new Three.DirectionalLight(0xffffff, 1);
+sunLamp.position.set(1, 1, 1);
+scene.add(sunLamp);
+
+const ambientLamp = new Three.AmbientLight(0xffffff, 1);
+scene.add(ambientLamp);
+
+const sky = new Sky();
+sky.scale.setScalar(45000);
+const sunPosition = new Three.Vector3(1, 1, 1);
+sky.material.uniforms.sunPosition.value = sunPosition;
+scene.add(sky);
+
+const raycast = new Three.Raycaster();
+
+const animate = () => {
+  controls.update();
+
+  renderer.render(scene, camera);
+};
+renderer.setAnimationLoop(animate);
+
+const physicsWorker = new PhysicsWorker();
+
 export const MyGraph = ({ solution }: Args) => {
   const container = useRef<null | HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState(() => new Three.Vector2());
-  const [renderer, setRenderer] = useState(() => new Three.WebGLRenderer());
-  const [selectedLevelState, setSelectedLevelState] =
-    useState<null | LevelState>(null);
-  useEffect(() => {
-    renderer.setSize(800, 600);
-    return () => {
-      renderer.domElement.remove();
-      renderer.dispose();
-    };
-  }, [renderer]);
-
-  useEffect(() => {
-    renderer.domElement.onmousemove = (e) => {
-      mousePos.x = (e.offsetX / renderer.domElement.width) * 2 - 1;
-      mousePos.y = -(e.offsetY / renderer.domElement.height) * 2 + 1;
-    };
-  }, [renderer, mousePos]);
-
-  const [scene, setScene] = useState(() => new Three.Scene());
-  useEffect(() => {
-    const sunLamp = new Three.DirectionalLight(0xffffff, 1);
-    sunLamp.position.set(1, 1, 1);
-    scene.add(sunLamp);
-
-    const ambientLamp = new Three.AmbientLight(0xffffff, 1);
-    scene.add(ambientLamp);
-
-    const sky = new Sky();
-    sky.scale.setScalar(45000);
-    const sunPosition = new Three.Vector3(1, 1, 1);
-    sky.material.uniforms.sunPosition.value = sunPosition;
-    scene.add(sky);
-  }, [scene]);
-
-  const [camera, setCamera] = useState(
-    () => new Three.PerspectiveCamera(75, 4 / 3, 0.1, 1000),
+  const [selectedLevelState, setSelectedLevelState] = useState<LevelState>(
+    solution.initial_state,
   );
-  useEffect(() => {
-    camera.position.set(10, 10, 20).multiplyScalar(10);
-  }, [camera]);
-
-  const [raycast, setRaycast] = useState(new Three.Raycaster());
-
-  const controls = useMemo(() => {
-    let c = new OrbitControls(camera, renderer.domElement);
-    c.maxPolarAngle = Math.PI * 0.8;
-    c.enableDamping = true;
-    c.screenSpacePanning = false;
-    c.update();
-    return c;
-  }, [renderer]);
-  useEffect(() => {}, [controls]);
 
   const [pausePhysics, setPausePhysics] = useState(false);
   const [physicsFrame, setPhysicsFrame] = useState(0);
-  const [physicsWorker, _] = useState(() => {
-    return new PhysicsWorker();
-  });
 
   useEffect(() => {
     physicsWorker.postMessage({
@@ -97,8 +88,6 @@ export const MyGraph = ({ solution }: Args) => {
       pause: false,
     } as PhysicsWorkerDefs.Message);
   }, [solution]);
-
-  useEffect(() => {}, [physicsWorker]);
 
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(
     null,
@@ -159,31 +148,21 @@ export const MyGraph = ({ solution }: Args) => {
     return () => {
       scene.remove(lines);
     };
-  }, [solution, meshes, scene, physicsFrame]);
+  }, [solution, meshes, physicsFrame]);
 
   useEffect(() => {
     scene.add(meshes);
     return () => {
       scene.remove(meshes);
     };
-  }, [meshes, scene]);
-
-  useEffect(() => {
-    const animate = () => {
-      controls.update();
-
-      renderer.render(scene, camera);
-    };
-
-    renderer.setAnimationLoop(animate);
-  }, [renderer, scene, camera, controls]);
+  }, [meshes]);
 
   useEffect(() => {
     container.current?.appendChild(renderer.domElement);
     return () => {
       container.current?.removeChild(renderer.domElement);
     };
-  }, [container, renderer]);
+  }, [container]);
 
   useEffect(() => {
     physicsWorker.onmessage = (e) => {
@@ -234,7 +213,7 @@ export const MyGraph = ({ solution }: Args) => {
 
   useEffect(() => {
     renderer.domElement.onmousedown = (e) => {
-      if (e.button !== 2) return;
+      if (e.button !== 0) return;
 
       raycast.setFromCamera(mousePos, camera);
 
@@ -244,7 +223,7 @@ export const MyGraph = ({ solution }: Args) => {
         setSelectedNodeIndex(intersection);
       }
     };
-  }, [renderer, raycast, meshes, camera, mousePos]);
+  }, [meshes]);
   return (
     <>
       <div ref={container}></div>

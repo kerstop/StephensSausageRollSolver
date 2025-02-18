@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  IVec3,
-  LevelDescription,
-  LevelGraph,
-  Sausage,
-  LevelState,
-} from "./types";
+import { IVec3, LevelDescription, LevelGraph, Sausage } from "./types";
 import { produce } from "immer";
 import TileGrid from "./LevelEditor/TileGrid";
 import { solve } from "solver";
@@ -108,7 +102,8 @@ function LevelEditor(args: Args) {
       '{"start_pos":[2,2,1],"start_dir":[1,0,0],"ground":[[2,2,0],[3,2,0],[4,2,0],[4,1,0]],"grills":[[5,1,0],[5,2,0],[6,2,0],[6,1,0]],"sausages":[{"pos":[4,1,1],"cooked":[[0,0],[0,0]],"orientation":"Vertical"}]}',
     ) as LevelDescription;
     loadLevelDescription(data);
-    args.setSolution?.(JSON.parse(solve(data)));
+    const solution = LevelGraph.fromDescription(data);
+    args.setSolution?.(solution);
   }, []);
 
   return (
@@ -253,7 +248,7 @@ function LevelEditor(args: Args) {
             return des.start_pos !== null;
           };
           if (isInitialized(levelDescription)) {
-            args.setSolution(JSON.parse(solve(levelDescription)));
+            args.setSolution(LevelGraph.fromDescription(levelDescription));
           }
         }}
       >

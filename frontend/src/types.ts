@@ -1,3 +1,5 @@
+import { solve } from "solver";
+
 export type IVec3 = [number, number, number];
 export namespace IVec3 {
   export function compare(v1: IVec3, v2: IVec3): boolean {
@@ -32,7 +34,7 @@ export interface LevelState {
   sausages: Sausage[];
   neighbors: NodeNeighbors | null;
   status: "Lost" | "Unsolved" | "Solution" | "Burnt";
-  is_initial: boolean;
+  is_initial?: boolean;
 }
 
 export namespace LevelState {
@@ -72,6 +74,21 @@ export interface LevelGraph {
   edges: Edge[];
   initial_state: LevelState;
   level_description: LevelDescription;
+}
+
+export namespace LevelGraph {
+  export function fromDescription(data: LevelDescription): LevelGraph {
+    const solution: LevelGraph = JSON.parse(solve(data));
+    const initial_id = solution.initial_state.id;
+    const initial_state = solution.states.find(
+      (state) => state.id === initial_id,
+    );
+    if (initial_state !== undefined) {
+      initial_state.is_initial = true;
+      solution.initial_state = initial_state;
+    }
+    return solution;
+  }
 }
 
 export interface LevelDescription {

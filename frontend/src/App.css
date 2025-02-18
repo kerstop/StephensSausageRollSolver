@@ -1,5 +1,4 @@
 #root {
-  max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
@@ -14,6 +13,11 @@ label {
   input[type="number"] {
     width: 5ch;
   }
+}
+
+.column {
+  display: inline-block;
+  margin-inline: 1em;
 }
 
 .row {

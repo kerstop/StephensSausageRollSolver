@@ -1,6 +1,6 @@
 import cytoscape, { ElementDefinition, NodeSingular } from "cytoscape";
 import { useEffect, useRef, useState } from "react";
-import { IVec2, LevelDescription, LevelGraph, LevelState } from "./types";
+import { LevelGraph, LevelState } from "./types";
 import LevelDisplay from "./LevelDisplay";
 
 interface Args {
@@ -9,7 +9,7 @@ interface Args {
 
 function Graph({ level }: Args) {
   const nodes: ElementDefinition[] = (() => {
-    return level.states.map((state, i) => {
+    return level.states.map((state, _i) => {
       return { data: { id: state.id.toString(), level: state } };
     });
   })();
