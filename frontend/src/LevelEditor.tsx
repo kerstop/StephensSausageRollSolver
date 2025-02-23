@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { IVec3, LevelDescription, LevelGraph, Sausage } from "./types";
 import { produce } from "immer";
 import TileGrid from "./LevelEditor/TileGrid";
-import { solve } from "solver";
 import SizeControls from "./LevelEditor/SizeControls";
 import Controls, { PlayerDirections, Tool } from "./LevelEditor/Controls";
 interface Args {
