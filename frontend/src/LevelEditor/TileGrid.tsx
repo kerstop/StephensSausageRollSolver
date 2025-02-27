@@ -4,6 +4,10 @@ import stephenSVG from "./stephen.svg";
 import stephenGoalSVG from "./stephen_goal.svg";
 import forkSVG from "./fork.svg";
 import forkGoalSVG from "./fork_goal.svg";
+import lowerCookedSausageIcon from "./sausage_lower_cooked.svg";
+import lowerUnCookedSausageIcon from "./sausage_lower_raw.svg";
+import upperCookedSausageIcon from "./sausage_upper_cooked.svg";
+import upperUnCookedSausageIcon from "./sausage_upper_raw.svg";
 
 const TileGrid = (args: {
   description: LevelDescription;
@@ -89,6 +93,50 @@ const TileGrid = (args: {
         if (z > 1) tileType = "air";
         else tileType = "water";
       }
+
+      const currentSausage =
+        args.state !== undefined
+          ? LevelState.getSausageAt(args.state, [x, y, z])
+          : LevelDescription.getSausageAt(args.description, [x, y, z]);
+
+      const sausageStyle: React.CSSProperties = {};
+      let lowerSausageIcon = lowerUnCookedSausageIcon;
+      let upperSausageIcon = upperUnCookedSausageIcon;
+      if (currentSausage) {
+        if (currentSausage.orientation === "Vertical") {
+          if (IVec3.compare(currentSausage.pos, [x, y, z])) {
+            sausageStyle.transform = "rotate(0turn)";
+          } else {
+            sausageStyle.transform = "rotate(0.5turn)";
+          }
+        } else {
+          if (IVec3.compare(currentSausage.pos, [x, y, z])) {
+            sausageStyle.transform = "rotate(0.75turn)";
+          } else {
+            sausageStyle.transform = "rotate(0.25turn)";
+          }
+        }
+
+        if (IVec3.compare(currentSausage.pos, [x, y, z])) {
+          if (currentSausage.cooked[0][0])
+            lowerSausageIcon = lowerCookedSausageIcon;
+          if (currentSausage.cooked[1][0])
+            upperSausageIcon = upperCookedSausageIcon;
+        } else {
+          if (currentSausage.cooked[0][1])
+            lowerSausageIcon = lowerCookedSausageIcon;
+          if (currentSausage.cooked[1][1])
+            upperSausageIcon = upperCookedSausageIcon;
+        }
+      }
+
+      const sausageIcons = (
+        <>
+          {<img src={lowerSausageIcon} className="icon" style={sausageStyle} />}
+          {<img src={upperSausageIcon} className="icon" style={sausageStyle} />}
+        </>
+      );
+
       row.push(
         <div
           key={x}
@@ -122,6 +170,7 @@ const TileGrid = (args: {
               [x, y, z],
             ) &&
             fork}
+          {currentSausage && sausageIcons}
         </div>,
       );
     }

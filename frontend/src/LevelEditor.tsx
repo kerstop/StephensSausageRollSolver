@@ -4,6 +4,7 @@ import { produce } from "immer";
 import TileGrid from "./LevelEditor/TileGrid";
 import SizeControls from "./LevelEditor/SizeControls";
 import Controls, { PlayerDirections, Tool } from "./LevelEditor/Controls";
+import Presets from "./LevelEditor/Presets";
 interface Args {
   setSolution: (solution: LevelGraph) => void;
 }
@@ -108,19 +109,22 @@ function LevelEditor(args: Args) {
   return (
     <>
       <SizeControls dimensions={dimensions} setDimensions={setDimensions} />
-      <form
-        action={(e: FormData) => {
-          const data = JSON.parse(
-            e.get("data")?.toString() ?? "{}",
-          ) as LevelDescription;
-          loadLevelDescription(data);
-        }}
-      >
-        <label>
-          {"Paste here to load a description "}
-          <input type="text" name="data" />
-        </label>
-      </form>
+      <div style={{ display: "flex" }}>
+        <form
+          action={(e: FormData) => {
+            const data = JSON.parse(
+              e.get("data")?.toString() ?? "{}",
+            ) as LevelDescription;
+            loadLevelDescription(data);
+          }}
+        >
+          <label>
+            {"Paste here to load a description "}
+            <input type="text" name="data" />
+          </label>
+        </form>
+        <Presets setDescription={loadLevelDescription} />
+      </div>
       <Controls
         tool={tool}
         setTool={setTool}
@@ -247,7 +251,9 @@ function LevelEditor(args: Args) {
             return des.start_pos !== null;
           };
           if (isInitialized(levelDescription)) {
-            args.setSolution(LevelGraph.fromDescription(levelDescription));
+            const levelGraph = LevelGraph.fromDescription(levelDescription);
+            console.log(levelGraph);
+            args.setSolution(levelGraph);
           }
         }}
       >

@@ -321,7 +321,6 @@ impl LevelState {
 
         for i in 0..state.sausages.len() {
             let sausage = state.sausages.get(i).unwrap();
-            dbg!(sausage);
             if !(state
                 .description
                 .ground
@@ -359,9 +358,9 @@ impl LevelState {
 }
 
 pub struct LevelGraph {
-    states: HashSet<Rc<LevelState>>,
-    initial_state: Rc<LevelState>,
-    level_description: LevelDescription,
+    pub states: HashSet<Rc<LevelState>>,
+    pub initial_state: Rc<LevelState>,
+    pub level_description: LevelDescription,
 }
 
 impl Serialize for LevelGraph {
@@ -491,15 +490,7 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
     exploration_queue.push_back(Rc::clone(&initial_state));
 
     while let Some(current_state) = exploration_queue.pop_front() {
-        println!("---");
-        println!("{} current node id", current_state.get_id());
-        println!("{:?} node neighbors value", current_state.neighbors);
-        println!("{} nodes in queue", exploration_queue.len());
-        println!("{} unique states found", states.len());
-        println!("current node status is {:?}", current_state.get_status());
-        println!("{}", serde_json::to_string(current_state.as_ref()).unwrap());
         if current_state.neighbors.get().is_some() {
-            println!("node previously explored");
             continue;
         }
 

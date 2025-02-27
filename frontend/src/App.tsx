@@ -8,18 +8,18 @@ function App() {
   const [solution, setSolution] = useState<LevelGraph | null>(null);
 
   return (
-    <>
-      <div className="column">
+    <div id="tool-container">
+      <div>
         <LevelEditor setSolution={setSolution} />
       </div>
       {solution !== null ? (
-        <div className="column">
+        <div>
           <MyGraph solution={solution} />
         </div>
       ) : (
         ""
       )}
-    </>
+    </div>
   );
 }
 

@@ -6,6 +6,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "test"
+
 [dependencies]
 bevy_math = "0.15.0"
 console_error_panic_hook = "0.1.7"

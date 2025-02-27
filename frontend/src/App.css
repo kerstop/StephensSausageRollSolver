@@ -15,9 +15,18 @@ label {
   }
 }
 
-.column {
-  display: inline-block;
-  margin-inline: 1em;
+#tool-container {
+  display: flex;
+  justify-content: space-evenly;
+  > div {
+    margin: 1em;
+  }
+}
+
+@media (orientation: portrait) {
+  #tool-container {
+    flex-direction: column;
+  }
 }
 
 .row {
