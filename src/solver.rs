@@ -5,14 +5,14 @@ use std::{
     cell::OnceCell,
     collections::{HashSet, VecDeque},
     hash::{DefaultHasher, Hash, Hasher},
-    rc::{Rc, Weak},
+    sync::{Arc, Weak},
 };
 use wasm_bindgen::prelude::*;
 
 #[cfg(test)]
 mod test;
 
-use bevy_math::IVec3;
+use bevy::math::IVec3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TileType {
@@ -47,8 +47,7 @@ pub struct LevelState {
     player_pos: IVec3,
     player_dir: IVec3,
     sausages: Vec<Sausage>,
-    neighbors: OnceCell<NodeNeighbors>,
-    description: Rc<LevelDescription>,
+    description: Arc<LevelDescription>,
 }
 
 impl Serialize for LevelState {
@@ -72,8 +71,7 @@ impl From<&LevelDescription> for LevelState {
             player_pos: value.start_pos,
             player_dir: value.start_dir,
             sausages: value.sausages.clone(),
-            neighbors: OnceCell::new(),
-            description: Rc::new(value.clone()),
+            description: Arc::new(value.clone()),
         }
     }
 }
@@ -357,12 +355,16 @@ impl LevelState {
     }
 }
 
+#[derive(Debug)]
+#[wasm_bindgen]
 pub struct LevelGraph {
-    pub states: HashSet<Rc<LevelState>>,
-    pub initial_state: Rc<LevelState>,
-    pub level_description: LevelDescription,
+    pub(crate) states: HashSet<Arc<LevelState>>,
+    pub(crate) edges: Vec<(Arc<LevelState>, Arc<LevelState>)>,
+    pub(crate) initial_state: Arc<LevelState>,
+    pub(crate) level_description: LevelDescription,
 }
 
+/*
 impl Serialize for LevelGraph {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -419,6 +421,7 @@ impl Serialize for LevelGraph {
         s.end()
     }
 }
+*/
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SausageOrientation {
@@ -467,30 +470,34 @@ impl Sausage {
 }
 
 #[wasm_bindgen]
-pub fn solve(level_description: JsValue) -> String {
+pub fn solve(level_description: JsValue) -> Result<LevelGraph, JsError> {
     console_error_panic_hook::set_once();
 
     let parsed: LevelDescription = match serde_wasm_bindgen::from_value(level_description) {
         Ok(d) => d,
         Err(e) => {
-            web_sys::console::log_2(&"error parsing level description".into(), &e.into());
-            return "null".into();
+            return Err(JsError::new(&format!(
+                "error parsing level description: {e:?}"
+            )));
         }
     };
-    serde_json::to_string(&generate_graph(&parsed)).unwrap()
+    Ok(generate_graph(&parsed))
 }
 
 pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
-    let initial_state = Rc::new(LevelState::from(level_description));
+    let initial_state = Arc::new(LevelState::from(level_description));
     #[allow(clippy::mutable_key_type)]
-    let mut states: HashSet<Rc<LevelState>> = HashSet::new();
-    states.insert(Rc::clone(&initial_state));
+    let mut states: HashSet<Arc<LevelState>> = HashSet::new();
+    states.insert(Arc::clone(&initial_state));
 
-    let mut exploration_queue: VecDeque<Rc<LevelState>> = VecDeque::new();
-    exploration_queue.push_back(Rc::clone(&initial_state));
+    let mut exploration_queue: VecDeque<Arc<LevelState>> = VecDeque::new();
+    exploration_queue.push_back(Arc::clone(&initial_state));
+
+    let mut explored: HashSet<Arc<LevelState>> = HashSet::new();
+    let mut edges: Vec<(Arc<LevelState>, Arc<LevelState>)> = Vec::new();
 
     while let Some(current_state) = exploration_queue.pop_front() {
-        if current_state.neighbors.get().is_some() {
+        if explored.contains(&current_state) {
             continue;
         }
 
@@ -501,46 +508,34 @@ pub fn generate_graph(level_description: &LevelDescription) -> LevelGraph {
             _ => (),
         }
 
-        let forward: Weak<LevelState> = {
-            let new_state = Rc::new(current_state.get_next_state(current_state.player_dir));
-            let saved_state = states.get_or_insert(new_state);
-            exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(saved_state)
-        };
-        let back: Weak<LevelState> = {
-            let new_state = Rc::new(current_state.get_next_state(-current_state.player_dir));
-            let saved_state = states.get_or_insert(new_state);
-            exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(saved_state)
-        };
-        let right: Weak<LevelState> = {
-            let new_state =
-                Rc::new(current_state.get_next_state(current_state.player_dir.cross(IVec3::Z)));
-            let saved_state = states.get_or_insert(new_state);
-            exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(saved_state)
-        };
-        let left: Weak<LevelState> = {
-            let new_state =
-                Rc::new(current_state.get_next_state(-current_state.player_dir.cross(IVec3::Z)));
-            let saved_state = states.get_or_insert(new_state);
-            exploration_queue.push_back(saved_state.clone());
-            Rc::downgrade(saved_state)
-        };
+        let new_state = Arc::new(current_state.get_next_state(current_state.player_dir));
+        let saved_state = states.get_or_insert(new_state);
+        edges.push((Arc::clone(&current_state), Arc::clone(saved_state)));
+        exploration_queue.push_back(saved_state.clone());
 
-        current_state
-            .neighbors
-            .set(NodeNeighbors {
-                forward,
-                back,
-                right,
-                left,
-            })
-            .unwrap();
+        let new_state = Arc::new(current_state.get_next_state(-current_state.player_dir));
+        let saved_state = states.get_or_insert(new_state);
+        edges.push((Arc::clone(&current_state), Arc::clone(saved_state)));
+        exploration_queue.push_back(saved_state.clone());
+
+        let new_state =
+            Arc::new(current_state.get_next_state(current_state.player_dir.cross(IVec3::Z)));
+        let saved_state = states.get_or_insert(new_state);
+        edges.push((Arc::clone(&current_state), Arc::clone(saved_state)));
+        exploration_queue.push_back(saved_state.clone());
+
+        let new_state =
+            Arc::new(current_state.get_next_state(-current_state.player_dir.cross(IVec3::Z)));
+        let saved_state = states.get_or_insert(new_state);
+        edges.push((Arc::clone(&current_state), Arc::clone(saved_state)));
+        exploration_queue.push_back(saved_state.clone());
+
+        explored.insert(Arc::clone(&current_state));
     }
 
     LevelGraph {
         states,
+        edges,
         initial_state,
         level_description: level_description.clone(),
     }
