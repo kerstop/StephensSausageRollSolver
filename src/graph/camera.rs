@@ -59,7 +59,7 @@ impl Default for CameraRig {
             pitch_delta: Default::default(),
             yaw: Default::default(),
             yaw_delta: Default::default(),
-            distance: 1.0,
+            distance: 200.0,
         }
     }
 }
@@ -75,8 +75,8 @@ impl Default for CameraSettings {
     fn default() -> Self {
         CameraSettings {
             sensitivity: Vec2::new(0.01, 0.01),
-            min_distance: 1.0,
-            max_distance: 100.0,
+            min_distance: 10.0,
+            max_distance: 100000.0,
         }
     }
 }

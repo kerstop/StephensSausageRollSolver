@@ -2,7 +2,15 @@
 use std::sync::Arc;
 
 use avian3d::prelude::*;
-use bevy::{math::prelude::*, prelude::*};
+use bevy::{
+    asset::RenderAssetUsages,
+    math::prelude::*,
+    prelude::*,
+    render::{
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
+        render_resource::{self},
+    },
+};
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::{
     prelude::*,
@@ -36,13 +44,22 @@ pub fn run(graph: solver::LevelGraph) {
         .add_plugins(ResourceInspectorPlugin::<PhysicsSettings>::default())
         .add_plugins(WorldInspectorPlugin::new())
         .add_plugins(camera::CameraPlugin)
-        .add_systems(Startup, (setup_nodes, setup_edges.after(setup_nodes)))
+        .add_plugins(ExtractComponentPlugin::<GraphEdgeNeighbors>::default())
+        .add_systems(
+            Startup,
+            (
+                setup_nodes,
+                setup_edges.after(setup_nodes),
+                setup_edges_mesh,
+            ),
+        )
         .add_systems(
             Update,
             (
                 calculate_graph_spring_force,
                 calculate_graph_repulsion_force,
                 move_graph_nodes,
+                generate_graph_edge_mesh,
             )
                 .chain(),
         )
@@ -86,6 +103,27 @@ fn setup_edges(mut commands: Commands, nodes: Query<(Entity, &GraphNodeData)>, g
     }
 }
 
+fn setup_edges_mesh(
+    mut commands: Commands,
+    mut material: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    commands.spawn((
+        MeshMaterial3d(material.add(StandardMaterial::from_color(Color::BLACK))),
+        Mesh3d(
+            meshes.add(
+                Mesh::new(
+                    render_resource::PrimitiveTopology::TriangleList,
+                    RenderAssetUsages::all(),
+                )
+                .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<Vec3>::new())
+                .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<Vec3>::new()),
+            ),
+        ),
+        GraphEdgeMesh,
+    ));
+}
+
 #[derive(Resource, Reflect, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
 struct PhysicsSettings {
@@ -113,11 +151,14 @@ fn calculate_graph_spring_force(
     time: Res<Time<Fixed>>,
 ) {
     for GraphEdgeNeighbors(entity_a, entity_b) in edges {
+        if entity_a == entity_b {
+            continue;
+        }
         let (transform_a, _) = nodes.get(*entity_a).unwrap();
         let (transform_b, _) = nodes.get(*entity_b).unwrap();
 
         let a_to_b = transform_b.translation - transform_a.translation;
-        let spring_force_a = -a_to_b
+        let spring_force_a = a_to_b
             .try_normalize()
             .or_else(|| Some(Sphere::new(1.0).sample_boundary(&mut rand::thread_rng())))
             .unwrap()
@@ -125,7 +166,7 @@ fn calculate_graph_spring_force(
             * physics_settings.graph_spring_force
             * time.delta_secs()
             / 2.0;
-        let spring_force_b = a_to_b
+        let spring_force_b = -a_to_b
             .try_normalize()
             .or_else(|| Some(Sphere::new(1.0).sample_boundary(&mut rand::thread_rng())))
             .unwrap()
@@ -205,5 +246,40 @@ struct GraphNodeData(Arc<solver::LevelState>);
 struct GraphEdgeBundle {
     neighbors: GraphEdgeNeighbors,
 }
-#[derive(Component)]
+
+#[derive(Component, ExtractComponent, Clone, Copy)]
 struct GraphEdgeNeighbors(Entity, Entity);
+
+#[derive(Component)]
+struct GraphEdgeMesh;
+
+fn generate_graph_edge_mesh(
+    neighbors: Query<&GraphEdgeNeighbors>,
+    nodes: Query<&Transform>,
+    mesh_container: Single<&Mesh3d, With<GraphEdgeMesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    camera: Single<&Transform, With<Camera>>,
+) {
+    let camera_position = camera.translation;
+    let mut tris: Vec<Vec3> = Vec::new();
+    let mut normals: Vec<Vec3> = Vec::new();
+    for GraphEdgeNeighbors(e1, e2) in neighbors {
+        let p1 = nodes.get(*e1).unwrap().translation;
+        let p2 = nodes.get(*e2).unwrap().translation;
+
+        let p1_p2 = (p2 - p1).try_normalize().unwrap_or(Vec3::Z);
+        let p1_camera = (camera_position - p1).normalize();
+        let up = p1_camera.cross(p1_p2).normalize();
+
+        tris.push(p1 + up * 0.5);
+        tris.push(p1 - up * 0.5);
+        tris.push(p2 - p1_camera * 0.05);
+        normals.push(up + p1_camera * 0.05);
+        normals.push(-up + p1_camera * 0.05);
+        normals.push(p1_camera);
+    }
+
+    let mesh = meshes.get_mut(&mesh_container.0).unwrap();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, tris);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+}
