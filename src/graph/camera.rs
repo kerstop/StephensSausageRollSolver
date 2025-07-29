@@ -1,9 +1,14 @@
 use std::f32::consts::PI;
 
 use bevy::{
-    input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
+    input::{
+        common_conditions::input_toggle_active,
+        mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
+    },
     prelude::*,
 };
+use bevy_inspector_egui::prelude::*;
+use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
 pub struct CameraPlugin;
 
@@ -12,13 +17,18 @@ impl Plugin for CameraPlugin {
         app.add_systems(Startup, spawn_camera);
         app.add_systems(Update, camera_rig_system);
         app.insert_resource(ClearColor(Color::hsl(0.0, 0.0, 0.8)));
+        app.register_type::<CameraSettings>();
+        app.init_resource::<CameraSettings>();
+        app.add_plugins(
+            ResourceInspectorPlugin::<CameraSettings>::default()
+                .run_if(input_toggle_active(false, KeyCode::KeyC)),
+        );
     }
 }
 
 fn spawn_camera(mut commands: Commands) {
     commands.spawn(CameraBundle { ..default() });
     commands.spawn(Observer::new(handle_click));
-    commands.init_resource::<CameraSettings>();
     commands.spawn((
         DirectionalLight {
             illuminance: 500.0,
@@ -43,6 +53,7 @@ pub struct CameraBundle {
 pub struct CameraRig {
     pub target: Option<Entity>,
     pub target_position: Vec3,
+    pub rig_position: Vec3,
     pub pitch: f32,
     pub pitch_delta: f32,
     pub yaw: f32,
@@ -55,20 +66,24 @@ impl Default for CameraRig {
         Self {
             target: Default::default(),
             target_position: Default::default(),
+            rig_position: Default::default(),
             pitch: Default::default(),
             pitch_delta: Default::default(),
             yaw: Default::default(),
             yaw_delta: Default::default(),
-            distance: 200.0,
+            distance: 50.0,
         }
     }
 }
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Reflect)]
 pub struct CameraSettings {
     pub sensitivity: Vec2,
     pub min_distance: f32,
     pub max_distance: f32,
+    pub camera_easing: f32,
+    /// field of view in degrees
+    pub fov: f32,
 }
 
 impl Default for CameraSettings {
@@ -77,6 +92,8 @@ impl Default for CameraSettings {
             sensitivity: Vec2::new(0.01, 0.01),
             min_distance: 10.0,
             max_distance: 100000.0,
+            camera_easing: 0.05,
+            fov: 80.0,
         }
     }
 }
@@ -92,14 +109,18 @@ pub fn handle_click(
 }
 
 pub fn camera_rig_system(
-    camera: Single<(&mut CameraRig, &mut Transform)>,
+    camera_entity: Single<(&mut CameraRig, &mut Transform, &mut Projection)>,
     settings: Res<CameraSettings>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mouse_scroll: Res<AccumulatedMouseScroll>,
     mouse_motion: Res<AccumulatedMouseMotion>,
     entity_transforms: Query<&Transform, Without<CameraRig>>,
 ) {
-    let (mut rig, mut transform) = camera.into_inner();
+    let (mut rig, mut transform, mut projection) = camera_entity.into_inner();
+
+    if let Projection::Perspective(perspective_projection) = projection.as_mut() {
+        perspective_projection.fov = settings.fov.to_radians()
+    }
 
     if let Some(target) = rig.target {
         match entity_transforms.get(target) {
@@ -128,9 +149,13 @@ pub fn camera_rig_system(
         (rig.distance - mouse_scroll.delta.y).clamp(settings.min_distance, settings.max_distance);
     rig.pitch = rig.pitch.clamp(-0.49 * PI, 0.49 * PI);
 
-    transform.translation = rig.target_position
+    rig.rig_position = rig
+        .rig_position
+        .lerp(rig.target_position, settings.camera_easing);
+
+    transform.translation = rig.rig_position
         + Quat::from_rotation_y(rig.yaw)
             * Quat::from_rotation_x(rig.pitch)
             * (Vec3::Z * rig.distance);
-    transform.look_at(rig.target_position, Vec3::Y);
+    transform.look_at(rig.rig_position, Vec3::Y);
 }

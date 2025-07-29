@@ -8,6 +8,7 @@ use bevy::{
     prelude::*,
     render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
+        render_graph,
         render_resource::{self},
     },
 };
@@ -22,11 +23,12 @@ use wasm_bindgen::prelude::*;
 use crate::solver;
 
 mod camera;
+mod compute_shader;
 
 #[wasm_bindgen]
 pub fn run(graph: solver::LevelGraph) {
-    App::new()
-        .insert_resource(Graph(graph))
+    let mut app = App::new();
+    app.insert_resource(Graph(graph))
         .init_resource::<PhysicsSettings>()
         .register_type::<PhysicsSettings>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -62,8 +64,8 @@ pub fn run(graph: solver::LevelGraph) {
                 generate_graph_edge_mesh,
             )
                 .chain(),
-        )
-        .run();
+        );
+    app.run();
 }
 
 fn setup_nodes(
@@ -138,7 +140,7 @@ impl Default for PhysicsSettings {
         Self {
             graph_spring_target_distance: 10.0,
             graph_spring_force: 0.2,
-            centralizing_force: 0.001,
+            centralizing_force: 0.00001,
             repulsion_force: 0.3,
         }
     }
